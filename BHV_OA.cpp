@@ -19,6 +19,7 @@
 #include <cmath> // For sqrt and pow
 #include <stdlib.h> // for atoi and atof (string to double/int)
 #include <algorithm> // for max_element
+#include "XYPolygon.h"
 
 using namespace std;
 
@@ -29,7 +30,7 @@ BHV_OA::BHV_OA(IvPDomain gdomain) :
   IvPBehavior(gdomain)
 {
   // Provide a default behavior name
-  IvPBehavior::setParam("name", "defaultname");
+  IvPBehavior::setParam("name", "default_name");
 
   // Declare the behavior decision space
   m_domain = subDomain(m_domain, "course,speed");
@@ -107,7 +108,7 @@ void BHV_OA::postConfigStatus()
 // Procedure: onIdleToRunState()
 //   Purpose: Invoked once upon each transition from idle to run state
 
-void BHV_A::onIdleToRunState()
+void BHV_OA::onIdleToRunState()
 {
 }
 
@@ -115,7 +116,7 @@ void BHV_A::onIdleToRunState()
 // Procedure: onRunToIdleState()
 //   Purpose: Invoked once upon each transition from run to idle state
 
-void BHV_A::onRunToIdleState()
+void BHV_OA::onRunToIdleState()
 {
 }
 
@@ -160,7 +161,7 @@ IvPFunction* BHV_OA::onRunState()
       if (result.size()==3)
 	{
 	  m_obs_info = result[2];
-	  ipf = buildFunctionWithZAIC();
+	  ipf = buildFunctionWithZAIC(); 
 	}
     }
   // Part N: Prior to returning the IvP function, apply the priority wt
@@ -182,13 +183,13 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
   vector<double> cost;
   vector<int> ang;
   stringstream ss, ss1, ss2, ss3, ss4;
-  string str;
+  string str, poly, obs_pos;
   // This is a constant multiplier for the cost function that sets the prohibition zone such that the utility function is zero when the cost is greater than this constant. The radius of the prohibition zone will be directly proportional to the threat level of the object (t_lvl*multipler) 
   double multiplier; 
   // These are the values need to create a ZAIC
   int summit, peakwidth, basewidth, summitdelta, minutil, maxutil;
-  
-  basewidth = 10; // Arbitrarly picked 10 degrees on each side
+
+  basewidth = 20; // Arbitrarly picked 10 degrees on each side
   peakwidth = 180-basewidth;
   summitdelta = 1;
   maxutil = 100; // Need to look at the Waypoint behavior to see what their maximum utility is
@@ -221,7 +222,9 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
   }
   multiplier = 4.5; // need to set this so that it is a function of the size and the current speed of the vessel
   ZAIC_PEAK head_zaic(m_domain, "course");
+  
 
+  poly = ",format=radial,radius=30,pts=3,edge_color=darkviolet,label=obs";
   max_cost = *max_element(cost.begin(), cost.end());
   // If the maximum cost is zero, then we dont want to create a ZAIC
   //   function describing the utility function
@@ -231,37 +234,48 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
       //   minutil, and maxutil  
       for (unsigned int ii=0;ii<cost.size(); ii++)
 	{
-	  if (cost[ii] > 1/multiplier) 
+	  if (cost[ii]==max_cost)
 	    {
-	      cost[ii] = 1/multiplier;
+	      if (cost[ii] > 1/multiplier) 
+		{
+		  cost[ii] = 1/multiplier;
+		}
+
+	      minutil = (int)floor((1-cost[ii]*multiplier)*maxutil);
+	      ss << (minutil);
+	      ss1 << (ang[ii]);
+	      str =  "Angle: " + ss1.str() + " Utility: " + ss.str();
+	      postMessage("ENC_OA", str);
+
+	      // Create an objective function using MOOS's ZAIC
+	      summit = (ang[ii]+180)%360;
+	      head_zaic.setParams(summit, peakwidth, basewidth, summitdelta, minutil, maxutil);
+	      ss3 << obs_x;
+	      ss4 << obs_y;
+	      obs_pos = "x="+ss3.str()+",y="+ss4.str();
+	      postMessage("VIEW_POLYGON", obs_pos+poly);
 	    }
-
-	  minutil = (int)floor((1-cost[ii]*multiplier)*maxutil);
-	  ss << (minutil);
-	  ss1 << (ang[ii]);
-	  str = "Angle: " + ss1.str() + " Utility: " + ss.str();
-	  postMessage("OA_var", str);
-
-	  // Create an objective function using MOOS's ZAIC
-	  summit = (ang[ii]+180)%360;
-	  head_zaic.setParams(summit, peakwidth, basewidth, summitdelta, minutil, maxutil);
-    
 	  // If we are not at the end of the cost vector add a new
 	  //  component to the ZAIC function
-	  if (ii<cost.size()-1)
-	    int index = head_zaic.addComponent();
+	  //if (ii<cost.size()-1)
+	  //int index = head_zaic.addComponent();
 	}
+    }
+  if (cost.empty())
+    {
+      obs_pos = "x=5000,y=5000";
+      postMessage("VIEW_POLYGON", obs_pos+poly);
     }
   // If the maximum cost is zero create a utility function that doesnt
   //   is happy at any angle
   //else
-  //head_zaic.setParams(0, 7, 0, 0, max_util, max_util);
+  //  head_zaic.setParams(0, 7, 0, 0, max_util, max_util);
   
   head_zaic.setValueWrap(true); // Wrap around the heading axis
   head_zaic.setSummitInsist(true);
   
   // Set the IvP Function to take the maximum value if there is overlap
-  bool take_the_max = false;
+  bool take_the_max = true;
 
   IvPFunction *ipf = 0;
   if(head_zaic.stateOK()){
