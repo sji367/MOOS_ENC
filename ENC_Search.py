@@ -169,34 +169,34 @@ def main():
                 max_cntr = counter
 
             ## Cycle throught the polygons 
-            while feature_poly:
-                geom_poly = feature_poly.GetGeometryRef() # Polygon from shapefile
-                # Get the interesection of the polygon from the shapefile and
-                #   the outline of tiff from pMarnineViewer
-                intersection_poly = geom_poly.Intersection(poly_filter) 
-            
-                # Get the ring of that intersection polygon
-                p_ring = intersection_poly.GetGeometryRef(0) 
-        
-                # Determine how many vertices there are in the polygon
-                points = p_ring.GetPointCount()
-                vertex = 'pts={' # String to hold the vertices
-                # Cycle through the vertices and store them as a string
-                for p1 in xrange(points):
-                    lon, lat, z = p_ring.GetPoint(p1)
-                    p_x,p_y = p(lon, lat)
-                    vertex += str(p_x-x_origin) + ','+ str(p_y-y_origin)
-                    if (p1!=points-1):
-                        vertex += ':'
-                poly = vertex+'},edge_color=yellow,label='+str(counter_poly)
-                if points !=0:
-                    comms.notify('VIEW_SEGLIST', poly, pymoos.time()+t)
-                counter_poly += 1
-                feature_poly = layer_poly.GetNextFeature()
-                
-            # Determine if a new polygon was used
-            if max_cntr_poly < counter_poly:
-                max_cntr_poly = counter_poly    
+#            while feature_poly:
+#                geom_poly = feature_poly.GetGeometryRef() # Polygon from shapefile
+#                # Get the interesection of the polygon from the shapefile and
+#                #   the outline of tiff from pMarnineViewer
+#                intersection_poly = geom_poly.Intersection(poly_filter) 
+#            
+#                # Get the ring of that intersection polygon
+#                p_ring = intersection_poly.GetGeometryRef(0) 
+#        
+#                # Determine how many vertices there are in the polygon
+#                points = p_ring.GetPointCount()
+#                vertex = 'pts={' # String to hold the vertices
+#                # Cycle through the vertices and store them as a string
+#                for p1 in xrange(points):
+#                    lon, lat, z = p_ring.GetPoint(p1)
+#                    p_x,p_y = p(lon, lat)
+#                    vertex += str(p_x-x_origin) + ','+ str(p_y-y_origin)
+#                    if (p1!=points-1):
+#                        vertex += ':'
+#                poly = vertex+'},edge_color=yellow,label='+str(counter_poly)
+#                if points !=0:
+#                    comms.notify('VIEW_SEGLIST', poly, pymoos.time()+t)
+#                counter_poly += 1
+#                feature_poly = layer_poly.GetNextFeature()
+#                
+#            # Determine if a new polygon was used
+#            if max_cntr_poly < counter_poly:
+#                max_cntr_poly = counter_poly    
             # Move polygon off screen - temperary fix for removing highlighted 
             #   obstacles (shown as polygons) from pMarineViewer
             for i in range(counter, max_cntr+1):
@@ -204,12 +204,12 @@ def main():
                 poly = 'format=radial,x= 5000,y=5000,radius=25,pts=8,edge_size=5,vertex_size=2,label='+str(i)
                 comms.notify('VIEW_POLYGON', poly, pymoos.time()+t)
             
-            # Move polygon off screen - temperary fix for removing highlighted 
-            #   obstacles (shown as polygons) from pMarineViewer
-            for i in range(counter_poly, max_cntr_poly+1):
-                time.sleep(.002)
-                poly = 'pts={5000,5000: 5001,5001},label='+str(i)
-                comms.notify('VIEW_SEGLIST', poly, pymoos.time()+t)
+#            # Move polygon off screen - temperary fix for removing highlighted 
+#            #   obstacles (shown as polygons) from pMarineViewer
+#            for i in range(counter_poly, max_cntr_poly+1):
+#                time.sleep(.002)
+#                poly = 'pts={5000,5000: 5001,5001},label='+str(i)
+#                comms.notify('VIEW_SEGLIST', poly, pymoos.time()+t)
                 
             
    
