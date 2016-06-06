@@ -163,6 +163,10 @@ IvPFunction* BHV_OA::onRunState()
 	  m_obs_info = result[2];
 	  ipf = buildFunctionWithZAIC(); 
 	}
+      else
+	{
+	  postMessage("VIEW_POLYGON", "x=5000,y=5000,format=radial,radius=30,pts=3,edge_color=darkviolet,label=obs");
+	}
     }
   // Part N: Prior to returning the IvP function, apply the priority wt
   // Actual weight applied may be some value different than the configured
@@ -177,12 +181,12 @@ IvPFunction* BHV_OA::onRunState()
 // This only really works when there is only one obstacle in the search zone
 IvPFunction *BHV_OA::buildFunctionWithZAIC()
 {
-  double obs_x, obs_y, max_cost, dist, util;
+  double max_cost, dist, util;
   string obs_type;
   int obs_t_lvl;
-  vector<double> cost;
+  vector<double> cost,obs_x, obs_y;
   vector<int> ang;
-  stringstream ss, ss1, ss2, ss3, ss4;
+  stringstream ss, ss1, ss2, ss3, ss4, ss5;
   string str, poly, obs_pos;
   // This is a constant multiplier for the cost function that sets the prohibition zone such that the utility function is zero when the cost is greater than this constant. The radius of the prohibition zone will be directly proportional to the threat level of the object (t_lvl*multipler) 
   double multiplier; 
@@ -202,17 +206,17 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
 
     // Convert the strings to doubles and ints
     vector<string> x = parseString(ind_obs_info[0], '=');
-    obs_x = strtod(x[1].c_str(), NULL); // Get rid of the 'x='
+    obs_x.push_back(strtod(x[1].c_str(), NULL)); // Get rid of the 'x='
     vector<string> y = parseString(ind_obs_info[1], '=');
-    obs_y = strtod(y[1].c_str(), NULL); // Get rid of the 'y='
+    obs_y.push_back(strtod(y[1].c_str(), NULL)); // Get rid of the 'y='
     obs_t_lvl = (int)floor(strtod(ind_obs_info[2].c_str(), NULL));
     
     // Type of obstacle
     obs_type = ind_obs_info[3];
 
     // Calculate the angle and cost for the obstacle
-    ang.push_back(relAng(m_ASV_x, m_ASV_y, obs_x, obs_y));
-    dist = sqrt(pow(m_ASV_x-obs_x,2) +pow(m_ASV_y-obs_y,2));
+    ang.push_back(relAng(m_ASV_x, m_ASV_y, obs_x[i], obs_y[i]));
+    dist = sqrt(pow(m_ASV_x-obs_x[i],2) +pow(m_ASV_y-obs_y[i],2));
 
     // Make sure you dont divide by zero - if it is less than 1, set it 
     //  equal to 1
@@ -224,8 +228,9 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
   ZAIC_PEAK head_zaic(m_domain, "course");
   
 
-  poly = ",format=radial,radius=30,pts=3,edge_color=darkviolet,label=obs";
+  poly = ",format=radial,radius=30,pts=3,edge_color=hotpink,label=obs";
   max_cost = *max_element(cost.begin(), cost.end());
+  
   // If the maximum cost is zero, then we dont want to create a ZAIC
   //   function describing the utility function
   if (max_cost != 0)
@@ -238,21 +243,37 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
 	    {
 	      if (cost[ii] > 1/multiplier) 
 		{
+		  basewidth = (int)floor(20*(multiplier*cost[ii])); // Arbitrarly picked 10 degrees on each side
+		  peakwidth = 180-basewidth;
 		  cost[ii] = 1/multiplier;
 		}
+	      else
+		{
+		  basewidth = 20; // Arbitrarly picked 10 degrees on each side
+		  peakwidth = 180-basewidth;
+		}
+	      ss1.str(string());
+	      ss2.str(string());
+	      ss1 << max_cost*multiplier;
+	      ss2 << basewidth;
+	      postMessage("Basewidth", "BW: "+ss2.str()+" Cost: "+ss1.str());
 
 	      minutil = (int)floor((1-cost[ii]*multiplier)*maxutil);
-	      ss << (minutil);
+	      ss1.str(string());
+	      ss2.str(string());
 	      ss1 << (ang[ii]);
-	      str =  "Angle: " + ss1.str() + " Utility: " + ss.str();
+	      ss2 << (minutil);
+	      str =  "Angle: " + ss1.str() + " Utility: " + ss2.str();
 	      postMessage("ENC_OA", str);
 
 	      // Create an objective function using MOOS's ZAIC
 	      summit = (ang[ii]+180)%360;
 	      head_zaic.setParams(summit, peakwidth, basewidth, summitdelta, minutil, maxutil);
-	      ss3 << obs_x;
-	      ss4 << obs_y;
-	      obs_pos = "x="+ss3.str()+",y="+ss4.str();
+	      ss1.str(string());
+	      ss2.str(string());
+	      ss1 << obs_x[ii];
+	      ss2 << obs_y[ii];
+	      obs_pos = "x="+ss1.str()+",y="+ss2.str();
 	      postMessage("VIEW_POLYGON", obs_pos+poly);
 	    }
 	  // If we are not at the end of the cost vector add a new
@@ -261,11 +282,7 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
 	  //int index = head_zaic.addComponent();
 	}
     }
-  if (cost.empty())
-    {
-      obs_pos = "x=5000,y=5000";
-      postMessage("VIEW_POLYGON", obs_pos+poly);
-    }
+  
   // If the maximum cost is zero create a utility function that doesnt
   //   is happy at any angle
   //else
