@@ -1,25 +1,37 @@
 /************************************************************/
-/*    NAME: Sam                                             */
+/*    NAME: Sam Reed                                        */
 /*    ORGN: UNH                                             */
 /*    FILE: BHV_OA.cpp                                      */
-/*    DATE:                                                 */
+/*    DATE: June 2016                                       */
 /************************************************************/
 
+#ifdef _WIN32
+#   define _USE_MATH_DEFINES
+#pragma warning(disable : 4786)
+#pragma warning(disable : 4503)
+#endif
+ 
 #include <iterator>
 #include <cstdlib>
+#include <vector>
+#include <sstream> // For stringstream
+#include <string>
+#include <cmath> // For sqrt and pow
+#include <stdlib.h> // for atoi and atof (string to double/int)
+#include <algorithm> // for max_element and sort
+
+// MOOS Libraries
+#include "XYPolygon.h"
+#include "OF_Coupler.h"
+#include "OF_Reflector.h"
+#include "AOF_Gauss.h"
 #include "MBUtils.h"
 #include "BuildUtils.h"
 #include "AngleUtils.h" // for RealAng
 #include "ZAIC_PEAK.h"
+#include "ZAIC_Vector.h"
 #include "BHV_OA.h"
-#include <stdlib.h>
-#include <vector>
-#include <sstream>
-#include <string>
-#include <cmath> // For sqrt and pow
-#include <stdlib.h> // for atoi and atof (string to double/int)
-#include <algorithm> // for max_element
-#include "XYPolygon.h"
+
 
 using namespace std;
 
@@ -30,13 +42,13 @@ BHV_OA::BHV_OA(IvPDomain gdomain) :
   IvPBehavior(gdomain)
 {
   // Provide a default behavior name
-  IvPBehavior::setParam("name", "default_name");
+  IvPBehavior::setParam("name", "ENC_OA");
 
   // Declare the behavior decision space
   m_domain = subDomain(m_domain, "course,speed");
 
   // Add any variables this behavior needs to subscribe for
-  addInfoVars("NAV_X, NAV_Y, Obstacles");
+  addInfoVars("WPT, Obstacles, NAV_SPEED, NAV_X, NAV_Y, NAV_HEAD");
 }
 
 //---------------------------------------------------------------
@@ -128,22 +140,36 @@ IvPFunction* BHV_OA::onRunState()
 {
   // Part 1: Build the IvP function
   IvPFunction *ipf = 0;
-  stringstream ss;
+  
   // Part 1a: Get information from the InfoBuffer
-  bool ok1;
+  bool ok1, ok2, ok3;
   m_obstacles = getBufferStringVal("Obstacles", ok1);
+  m_WPT = getBufferStringVal("WPT", ok2);
+  m_speed = getBufferDoubleVal("NAV_SPEED", ok3);
+  
+  // Check if there are new obstacles and speed and if there are, make a new IvPfunction
   if(!ok1) {
     postWMessage("No new obstacles info buffer.");
     return(0);
   }
+  else if(!ok3)
+    {
+      postWMessage("Speed is not being defined.");
+      return(0);
+    }
   else
     {
-
-  // Part 1b: Parse the obstacle information collected in the previous step
-  
-  // Seperate the individual pieces of the obstacle
-  // The format is:
-  //   ASV_X,ASV_Y,heading:# of Obstacles:x,y,t_lvl,type!x,y,t_lvl,type!...
+      // Part 1b: Parse the obstacle information collected in the previous step
+      // Parse the Waypoint Information
+      if (ok2)
+	{
+	  vector<string> temp_WPT = parseString(m_WPT, ',');
+	  m_WPT_x = (int)floor(strtod(temp_WPT[0].c_str(), NULL));
+	  m_WPT_y = (int)floor(strtod(temp_WPT[1].c_str(), NULL));
+	}
+      // Seperate the individual pieces of the obstacle
+      // The format is:
+      //   ASV_X,ASV_Y,heading:# of Obstacles:x,y,t_lvl,type!x,y,t_lvl,type!...
       vector<string> result = parseString(m_obstacles, ':');
 
       // Parse ASV info
@@ -161,12 +187,16 @@ IvPFunction* BHV_OA::onRunState()
       if (result.size()==3)
 	{
 	  m_obs_info = result[2];
-	  ipf = buildFunctionWithZAIC(); 
+	  //ipf = buildIvPFunction(); 
+	  //ipf = buildFunctionWithZAIC();
+	  ipf = buildZAIC_Vector();
 	}
+      /*
+      // This piece is only nessisary for the buildIvPFunction()
       else
-	{
-	  postMessage("VIEW_POLYGON", "x=5000,y=5000,format=radial,radius=30,pts=3,edge_color=darkviolet,label=obs");
-	}
+	postMessage("VIEW_POLYGON", "x=5000,y=5000,format=radial,radius=30,pts=3,edge_color=darkviolet,label=obs");
+      */
+      
     }
   // Part N: Prior to returning the IvP function, apply the priority wt
   // Actual weight applied may be some value different than the configured
@@ -178,7 +208,14 @@ IvPFunction* BHV_OA::onRunState()
   return(ipf);
 }
 
-// This only really works when there is only one obstacle in the search zone
+/***************************************************************************/
+/* This function parses the obstacles and then uses that information to    */
+/*   create an IvPFunction using the ZAIC  tools. This function is         */
+/*   functional, however it only takes in account only the obstacle with   */
+/*   highest cost in the search area. Therefore it only really works when  */
+/*   there is only one obstacle in the search zone. Also utility decreases */
+/*   linearly with angle.
+/***************************************************************************/
 IvPFunction *BHV_OA::buildFunctionWithZAIC()
 {
   double max_cost, dist, util;
@@ -224,10 +261,11 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
       dist = 1;
     cost.push_back(obs_t_lvl/dist);
   }
-  multiplier = 4.5; // need to set this so that it is a function of the size and the current speed of the vessel
+
+  // Need to set this so that it is a function of the size and the current speed of the vessel
+  multiplier = 4.5; 
   ZAIC_PEAK head_zaic(m_domain, "course");
   
-
   poly = ",format=radial,radius=30,pts=3,edge_color=hotpink,label=obs";
   max_cost = *max_element(cost.begin(), cost.end());
   
@@ -239,11 +277,13 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
       //   minutil, and maxutil  
       for (unsigned int ii=0;ii<cost.size(); ii++)
 	{
+	  // If the cost is the maximum cost, then calculate the utility of traveling in that direction
 	  if (cost[ii]==max_cost)
 	    {
+	      // Set a maximum cost (aka if the ASV has gone into the prohibition zone). If this is the case increase the width of the utility penalty (basewidth).
 	      if (cost[ii] > 1/multiplier) 
 		{
-		  basewidth = (int)floor(20*(multiplier*cost[ii])); // Arbitrarly picked 10 degrees on each side
+		  basewidth = (int)floor(20*(multiplier*cost[ii])); 
 		  peakwidth = 180-basewidth;
 		  cost[ii] = 1/multiplier;
 		}
@@ -252,12 +292,14 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
 		  basewidth = 20; // Arbitrarly picked 10 degrees on each side
 		  peakwidth = 180-basewidth;
 		}
+	      // Post the information on the Basewidth to the MOOSDB
 	      ss1.str(string());
 	      ss2.str(string());
 	      ss1 << max_cost*multiplier;
 	      ss2 << basewidth;
 	      postMessage("Basewidth", "BW: "+ss2.str()+" Cost: "+ss1.str());
 
+	      // Post the information on the obstacle to the MOOSDB
 	      minutil = (int)floor((1-cost[ii]*multiplier)*maxutil);
 	      ss1.str(string());
 	      ss2.str(string());
@@ -269,6 +311,8 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
 	      // Create an objective function using MOOS's ZAIC
 	      summit = (ang[ii]+180)%360;
 	      head_zaic.setParams(summit, peakwidth, basewidth, summitdelta, minutil, maxutil);
+
+	      // Post a polygon to the MOOSDB showing which obstacle is being avoided
 	      ss1.str(string());
 	      ss2.str(string());
 	      ss1 << obs_x[ii];
@@ -276,20 +320,12 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
 	      obs_pos = "x="+ss1.str()+",y="+ss2.str();
 	      postMessage("VIEW_POLYGON", obs_pos+poly);
 	    }
-	  // If we are not at the end of the cost vector add a new
-	  //  component to the ZAIC function
-	  //if (ii<cost.size()-1)
-	  //int index = head_zaic.addComponent();
 	}
     }
-  
-  // If the maximum cost is zero create a utility function that doesnt
-  //   is happy at any angle
-  //else
-  //  head_zaic.setParams(0, 7, 0, 0, max_util, max_util);
+
   
   head_zaic.setValueWrap(true); // Wrap around the heading axis
-  head_zaic.setSummitInsist(true);
+  head_zaic.setSummitInsist(true); // It combines the multiple utility functions by adding them together 
   
   // Set the IvP Function to take the maximum value if there is overlap
   bool take_the_max = true;
@@ -303,4 +339,255 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
     postWMessage(head_zaic.getWarnings());
   
   return(ipf);
+}
+
+/***************************************************************************/
+/* This function parses the obstacles and then uses that information to    */
+/*   create an IvPFunction using the ZAIC Vector tools. This function is   */
+/*   the most functional out of the three because it uses a Gaussian       */
+/*   distribution to describe how the utility falls off as a function of   */
+/*   angle and it takes into account all obstacles in the search area.     */
+/***************************************************************************/
+IvPFunction *BHV_OA::buildZAIC_Vector()
+{
+  IvPFunction *ivp_function = 0;
+  double max_cost, dist, util;
+  string obs_type;
+  int obs_t_lvl;
+  vector<double> cost,obs_x, obs_y;
+  vector<int> ang;
+  stringstream ss, ss1, ss2, ss3, ss4, ss5;
+  string str, poly, obs_pos;
+  // This is a constant multiplier for the cost function that sets the prohibition zone such that the utility function is zero when the cost is greater than this constant. The radius of the prohibition zone will be directly proportional to the threat level of the object (t_lvl*multipler) 
+  double multiplier; 
+  
+  int maxutil = 100; // Need to look at the Waypoint behavior to see what their maximum utility is
+
+  //  First seperate the obstacles from one another
+  vector<string> info = parseString(m_obs_info, '!');
+  for (unsigned int i=0;i<info.size(); i++)
+    {
+      // Parse the individual obstacles
+      vector<string> ind_obs_info = parseString(info[i], ',');
+
+      // Convert the strings to doubles and ints
+      vector<string> x = parseString(ind_obs_info[0], '=');
+      obs_x.push_back(strtod(x[1].c_str(), NULL)); // Get rid of the 'x='
+      vector<string> y = parseString(ind_obs_info[1], '=');
+      obs_y.push_back(strtod(y[1].c_str(), NULL)); // Get rid of the 'y='
+      obs_t_lvl = (int)floor(strtod(ind_obs_info[2].c_str(), NULL));
+    
+      // Type of obstacle
+      obs_type = ind_obs_info[3];
+
+      // Calculate the angle and cost for the obstacle
+      ang.push_back(relAng(m_ASV_x, m_ASV_y, obs_x[i], obs_y[i]));
+      dist = sqrt(pow(m_ASV_x-obs_x[i],2) +pow(m_ASV_y-obs_y[i],2));
+
+      // Make sure you dont divide by zero - if it is less than 1, set it 
+      //  equal to 1
+      if (dist <1)
+	dist = 1;
+      cost.push_back(obs_t_lvl/dist);
+    
+    }
+  // Need to set this so that it is a function of the size and the current speed of the vessel
+  double v_size = 4;
+  multiplier = v_size/m_speed*4.5; 
+
+  ZAIC_Vector head_zaic_v(m_domain, "course");
+  
+  max_cost = *max_element(cost.begin(), cost.end());
+  
+  // Used for the ZAIC_Vector function
+  vector<double> domain_vals, range_vals;
+  
+  // Fill the array with maxiumum utility
+  int OA_util[360];
+  fill(OA_util,OA_util+360, maxutil);
+
+  // Information on the obstacle
+  int width, cur_ang;
+
+  double c, sigma;
+  if (max_cost != 0)
+    {
+      for (unsigned int ii=0;ii<cost.size(); ii++)
+	{
+	  
+	  // Set a limit for the cost as well as set sigma and the width 
+	  if (cost[ii] > 1/multiplier) 
+	    {
+	      c = 1;
+	      width = (int)floor(20*(multiplier*cost[ii]));
+	      sigma = 8+width/8;
+	    }
+	  else
+	    {
+	      // lower the cost so that farther obstacles effect the OA less
+	      c = pow(cost[ii]*multiplier,3);
+	      width = 20;
+	      sigma = 8;
+	    }
+
+	  // This is the utility for the OA procedure for a particular angle in the gaussian window which describes how the cost falls off from directly towards the obstacle 
+	  int utility;
+
+	  // This calculates the utility of the Gaussian window function and stores that value if it is less than the current utility for all obstacles
+	  for (int k = 0; k< (2*width+1); k++)
+	    {
+	      // Calculate the angle that will be used in the gaussian window
+	      cur_ang = ang[ii]-(width)+k;
+	      if (cur_ang < 0)
+		cur_ang += 360;
+	      if (cur_ang >= 360)
+		cur_ang += -360;
+
+	      // M_E is e (2.7172...)
+	      utility = (int)floor(maxutil*(1-pow(M_E, -(pow((cur_ang - ang[ii]),2)/(2*(sigma * sigma))))*c));
+
+	      // If the current utility value is less than the one for the gaussian window then store the one for the Gaussian window
+	      if (utility<OA_util[cur_ang])
+		  OA_util[cur_ang]=utility;
+	    }
+	}
+      
+      // Set the values for the angle (domain) and utility (range)
+      for (int iii = 0; iii<359; iii++)
+	{
+	  domain_vals.push_back(iii); range_vals.push_back(OA_util[iii]);
+	}
+      head_zaic_v.setDomainVals(domain_vals);
+      head_zaic_v.setRangeVals(range_vals);
+
+      // Clear the domain and range values
+      domain_vals.clear();
+      range_vals.clear();
+
+      // Extract the IvP function
+      ivp_function = head_zaic_v.extractIvPFunction();
+      
+    }
+  return(ivp_function);
+}
+
+/***************************************************************************/
+/* This function parses the obstacles and then uses that information to    */
+/*   create an IvPFunction using the reflector tools. This function is not */
+/*   functional and causes the helm to crash when any obstacles are found. */
+/***************************************************************************/
+IvPFunction *BHV_OA::buildIvPFunction()
+{
+  IvPFunction *ipf = 0;
+  double max_cost, dist, util;
+  string obs_type;
+  int obs_t_lvl;
+  vector<double> cost,obs_x, obs_y;
+  vector<int> ang;
+  stringstream ss, ss1, ss2, ss3, ss4, ss5;
+  string str, poly, obs_pos;
+  // This is a constant multiplier for the cost function that sets the prohibition zone such that the utility function is zero when the cost is greater than this constant. The radius of the prohibition zone will be directly proportional to the threat level of the object (t_lvl*multipler) 
+  double multiplier; 
+  int  maxutil= 100; // Need to look at the Waypoint behavior to see what their maximum utility is
+
+  //  First seperate the obstacles from one another
+  vector<string> info = parseString(m_obs_info, '!');
+  for (unsigned int i=0;i<info.size(); i++){
+    // Parse the individual obstacles
+    vector<string> ind_obs_info = parseString(info[i], ',');
+
+    // Convert the strings to doubles and ints
+    vector<string> x = parseString(ind_obs_info[0], '=');
+    obs_x.push_back(strtod(x[1].c_str(), NULL)); // Get rid of the 'x='
+    vector<string> y = parseString(ind_obs_info[1], '=');
+    obs_y.push_back(strtod(y[1].c_str(), NULL)); // Get rid of the 'y='
+    obs_t_lvl = (int)floor(strtod(ind_obs_info[2].c_str(), NULL));
+    
+    // Type of obstacle
+    obs_type = ind_obs_info[3];
+
+    // Calculate the angle and cost for the obstacle
+    ang.push_back(relAng(m_ASV_x, m_ASV_y, obs_x[i], obs_y[i]));
+    dist = sqrt(pow(m_ASV_x-obs_x[i],2) +pow(m_ASV_y-obs_y[i],2));
+
+    // Make sure you dont divide by zero - if it is less than 1, set it 
+    //  equal to 1
+    if (dist <1)
+      dist = 1;
+    cost.push_back(obs_t_lvl/dist);
+  }
+  multiplier = 4.5; // need to set this so that it is a function of the size and the current speed of the vessel
+  AOF_Gauss aof_g(m_domain);
+  /*
+    AOF_Gauss aof(m_domain);
+  
+  
+    max_cost = *max_element(cost.begin(), cost.end());
+    string center, sigma, amp;
+
+    // If the maximum cost is zero, then we dont want to create a ZAIC
+    //   function describing the utility function
+    if (max_cost != 0)
+    {
+    center.clear();
+    sigma.clear();
+    amp.clear();
+    double sig;
+    for (int ii =0; ii<m_num_obs; ii++)
+    {
+    stringstream ss_cent, ss_sigma, ss_amp;
+    if (cost[ii] > 1/multiplier)
+    {
+    sig = multiplier*cost[ii];
+    cost[ii] = 1/multiplier;
+    }
+    else
+    sig = 1;
+    ss_cent << ang[ii];
+    ss_amp << cost[ii];
+    ss_sigma << sig;
+    sigma += ss_cent.str();
+    center += ss_cent.str();
+    amp += ss_amp.str();
+    if (ii != m_num_obs-1)
+    {
+    sigma += ",";
+    center += ",";
+    amp += ",";
+    }
+    }
+    
+    bool ok = true;
+    ss << m_num_obs;
+      
+      
+    // Step 1 - Create the AOF instance and set parameters
+    ok = ok && aof_g.setParam("center", center);
+    //ok = ok && aof_g.setParam("sigma", sigma);
+    //ok = ok && aof_g.setParam("amp", amp);
+      
+    if (ok)
+    postWMessage(sigma);
+      
+    // Step 2 - Create the Reflector instance given the AOF
+    if(ok)
+    {
+    postWMessage("Ok");
+      
+    OF_Reflector reflector(&aof);
+  
+    // Step 3 - Build and Extract the IvP Function
+    int  amt_created = reflector.create(500,0);
+    ipf = reflector.extractIvPFunction();
+    if (ipf == 0)
+    postWMessage("ERROR --> Size of xcent != Size of sigma != Size of range");
+      
+    }
+    else
+    postWMessage("ERROR --> Check out the Parameters");
+  //*/
+  // }
+  
+  return(ipf);
+
 }
