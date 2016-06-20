@@ -109,8 +109,9 @@ def main():
     file_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'
     file_line = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_line2.shp'
     
-##---------------------------------------------------------------------------##    
-    ## Print the point obstacles
+###############################################################################
+##########                  Print the Point Obstacles                ##########
+###############################################################################
     # Get the driver and open the point file
     driver = ogr.GetDriverByName('ESRI Shapefile')
     ds = driver.Open(file_pnt, 0)
@@ -122,8 +123,8 @@ def main():
     
     # Filter the layer to only include features with Threat level > 0
     layer.SetSpatialFilter(poly_filter) 
-    #layer.SetAttributeFilter("T_lvl != '0'")
-    #print 'Num of Features in Filter: %d' %layer.GetFeatureCount()
+#    layer.SetAttributeFilter("T_lvl != '0'")
+#    print '# of Features in Filter: %d' %layer.GetFeatureCount()
     
     feature = layer.GetNextFeature()
     cnt = 1
@@ -131,7 +132,7 @@ def main():
         geom = feature.GetGeometryRef()
         t_lvl = feature.GetField(0) # Get the Threat Level for that feature
         obs_type = feature.GetField(1) # Get the type of obstacle that the feature is
-        time.sleep(.01) # Don't make it faster or it wont print all of the points
+        time.sleep(.02) # Don't make it faster or it wont print all of the points
         
         # Create the VIEW_MARKER string
         #cntr = cntr+1
@@ -168,8 +169,9 @@ def main():
 #        print pymoos.time()-t
         feature = layer.GetNextFeature()
         
-##---------------------------------------------------------------------------##
-    ## Print the Polygons
+###############################################################################
+##########               Print the Polygons Obstacles                ##########
+###############################################################################
     ds = driver.Open(file_poly, 0)
     
     # There is only one layer in each file and we want to open it
@@ -178,8 +180,10 @@ def main():
     # Filter the layer to only include features within the area in 
     #   pMarnineViewer
     layer.SetSpatialFilter(poly_filter)
-    feature = layer.GetNextFeature()
+#    print 'Num of Features in Filter: %d' %layer.GetFeatureCount()
+    feature = layer.GetFeature(0)
     while feature:
+        time.sleep(.01)
         geom = feature.GetGeometryRef() # Polygon from shapefile
         # Get the interesection of the polygon from the shapefile and the
         #   outline of tiff from pMarnineViewer
@@ -188,38 +192,43 @@ def main():
         # Get the ring of that intersection polygon
         p_ring = intersection_poly.GetGeometryRef(0) 
         
-        # Determine how many vertices there are in the polygon
-        points = p_ring.GetPointCount()
-        vertex = 'pts={' # String to hold the vertices
-        # Cycle through the vertices and store them as a string
-        for p1 in xrange(points):
-            lon, lat, z = p_ring.GetPoint(p1)
-            p_x,p_y = p(lon, lat)
-            vertex += str(p_x-x_origin) + ','+ str(p_y-y_origin)
-            if (p1!=points-1):
-                vertex += ':'
-        t_lvl = feature.GetField(0) # Get threat level
+#        print feature.GetField(0)
+        if p_ring:
+            # Determine how many vertices there are in the polygon
+            points = p_ring.GetPointCount()
+            vertex = 'pts={' # String to hold the vertices
+            # Cycle through the vertices and store them as a string
+            for p1 in xrange(points):
+                lon, lat, z = p_ring.GetPoint(p1)
+                p_x,p_y = p(lon, lat)
+                vertex += str(p_x-x_origin) + ','+ str(p_y-y_origin)
+                if (p1!=points-1):
+                    vertex += ':'
+            t_lvl = feature.GetField(0) # Get threat level
         
-        # Change the Color of the point based on the Threat Level
-        if t_lvl == 5:
-            color = 'edge_color=black, vertex_color=black'
-        if t_lvl == 4:
-            color = 'edge_color=red,vertex_color=red'
-        elif t_lvl == 3:
-            color = 'edge_color=orange,vertex_color=orange'
-        elif t_lvl == 2:
-            color = 'edge_color=yellow,vertex_color=yellow'
-        elif t_lvl == 1:
-            color = 'edge_color=blue,vertex_color=brown'
-        elif t_lvl == 0:
-            color = 'edge_color=green,vertex_color=green'
-        if points != 0:
-            comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color, pymoos.time()+t)
+            # Change the Color of the point based on the Threat Level
+            if t_lvl == 5:
+                color = 'edge_color=black, vertex_color=black'
+            if t_lvl == 4:
+                color = 'edge_color=red,vertex_color=red'
+            elif t_lvl == 3:
+                color = 'edge_color=orange,vertex_color=orange'
+            elif t_lvl == 2:
+                color = 'edge_color=yellow,vertex_color=yellow'
+            elif t_lvl == 1:
+                color = 'edge_color=blue,vertex_color=brown'
+            elif t_lvl == 0:
+                color = 'edge_color=green,vertex_color=green'
+                
+            
+            if points != 0:
+                comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color, pymoos.time()+t)
 #            print pymoos.time()+t
         feature = layer.GetNextFeature()
         
-##---------------------------------------------------------------------------##
-    ## Print out the lines
+###############################################################################
+##########                 Print the Line Obstacles                  ##########
+###############################################################################
     ds = driver.Open(file_line, 0)
     
     # There is only one layer in each file and we want to open it
@@ -230,6 +239,7 @@ def main():
     layer.SetSpatialFilter(poly_filter)
     feature = layer.GetNextFeature()
     while feature:
+        time.sleep(.01)
         line = feature.GetGeometryRef() # line from shapefile
         # Get the interesection of the line from the shapefile and the
         #   outline of tiff from pMarnineViewer
