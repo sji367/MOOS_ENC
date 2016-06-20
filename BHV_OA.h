@@ -1,8 +1,8 @@
 /************************************************************/
-/*    NAME: Sam                                             */
+/*    NAME: Sam Reed                                        */
 /*    ORGN: UNH                                             */
 /*    FILE: BHV_OA.h                                        */
-/*    DATE:                                                 */
+/*    DATE: June 2016                                       */
 /************************************************************/
 
 #ifndef A_HEADER
@@ -10,6 +10,7 @@
 
 #include <string>
 #include "IvPBehavior.h"
+#include "AOF.h"
 
 class BHV_OA : public IvPBehavior {
 public:
@@ -29,13 +30,15 @@ public:
 
 protected: // Local Utility functions
   IvPFunction* buildFunctionWithZAIC();
+	IvPFunction* buildIvPFunction();
+	IvPFunction* buildZAIC_Vector();
 
 protected: // Configuration parameters
 
 protected: // State variables
-  string m_obstacles, m_obs_info;
-  double m_ASV_x, m_ASV_y, m_ASV_head;
-  int m_num_obs; 
+  string m_obstacles, m_obs_info, m_WPT;
+  double m_ASV_x, m_ASV_y, m_ASV_head, m_speed;
+  int m_num_obs, m_WPT_x, m_WPT_y;
 };
 
 #define IVP_EXPORT_FUNCTION
