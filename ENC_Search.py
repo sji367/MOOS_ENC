@@ -22,6 +22,9 @@ import numpy as np
 
 comms = pymoos.comms()
 
+#==============================================================================
+## Initialize some global variables
+#==============================================================================
 # Calculate the origin 
 p = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
 
@@ -29,12 +32,22 @@ LatOrigin  = 43.071959194444446
 LongOrigin = -70.711610833333339 
 x_origin,y_origin = p(LongOrigin, LatOrigin)
 
-# Register for updates of the MOOS variables NAV_X and NAV_Y once every second
+#==============================================================================
+## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
+#==============================================================================
 def on_connect():
     comms.register('NAV_X',1)
     comms.register('NAV_Y',1)
     comms.register('NAV_HEADING',1)
     return True
+    
+#==============================================================================
+# To convert the calculated angle to the one that relates to the one that MOOS
+#   outputs, you have to use the formula: MOOS_ang = -(calc_ang-90)
+#==============================================================================
+def ang4MOOS(angle):
+    return -(angle-90)
+    
 #==============================================================================
 # Function to determine what the important information should be outputed for
 #   each polygon in the search area. This function only works if there are 
@@ -45,7 +58,8 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
         geom = intersect
     else:
         geom = feature.GetGeometryRef()
-        
+    
+    # Initialize variables
     x1 = 0
     y1 = 0
     x2 = 0
@@ -54,7 +68,7 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     y_small = 9999
     
     min_angle = 360
-    max_angle = 0
+    max_angle = -360
     min_dist = 9999 
     min_dist_angle = 999
     
@@ -64,10 +78,11 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     
     ring = geom.GetGeometryRef(0)
     num_points =  ring.GetPointCount()
-    # Cycle through to find the matching x and y coordinates
+    flag = True
+    # Cycle through the to find the matching x and y coordinates
     for i in range (0, num_points):
-        lon = ring.GetX(i)#np.around(ring.GetX(i), decimals=6)
-        lat = ring.GetY(i)#np.around(ring.GetY(i), decimals=6)
+        lon = ring.GetX(i)
+        lat = ring.GetY(i)
         ptx, pty = p(lon, lat)
         
         ptx += -x_origin
@@ -76,14 +91,27 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
         d = np.sqrt(np.square(ASV_X-ptx)+np.square(ASV_Y-pty))
         angle = np.arctan2(pty-ASV_Y,ptx-ASV_X)*180/np.pi      
         
-        # Make sure that the angle are positive
-        if angle <0:
-            angle += 360
-        angle += heading
+        # There is one major issue with finding the minimum and maximum angles.
+        #   It is that when the angle switches from 360 to 0. This will lead to
+        #   incorrect angles being saved as the minimum and maximum. Therefore
+        #   when the angle is in the right half plane we will use -180 to 180 
+        #   and when the angle is in the left half plane, we will use 0 to 360.
         
-        # Make sure that the angle are below 360
-        if angle >360:
-            angle += -360
+        # Check to see if the first point is in the right or left hand plane.
+        #   From this, it will set if the angle will range from 0 to 360 or 
+        #   -180 to 180.
+        if i==0:
+            # Case 1: Right half plane --> flag = false
+            if (-90 <= angle < 90):
+                flag = False
+            # Case 2: Left half plane --> flag = true
+            else:
+                flag = True
+                
+        # If it is Case 2, then have it go from 0 to 360. Otherwise the angle
+        #   will range from -180 to 180
+        if flag:
+            angle = np.mod(angle, 360)
             
         # Determine if the angle is the minimum angle
         if angle < min_angle:
@@ -109,10 +137,10 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
             y_small = pty
         
     # Post these points to pMarineViewer
-    pt1 = 'x='+str(x1)+',y='+str(y1)+',vertex_size=8,vertex_color=white,label=pt1_'+str(cntr)
+    pt1 = 'x='+str(x1)+',y='+str(y1)+',vertex_size=8,vertex_color=white,active=true,label=pt1_'+str(cntr)
     comms.notify('VIEW_POINT', pt1, pymoos.time())
     time.sleep(.001)
-    pt2 = 'x='+str(x2)+',y='+str(y2)+',vertex_size=8,vertex_color=white,label=pt2_'+str(cntr)
+    pt2 = 'x='+str(x2)+',y='+str(y2)+',vertex_size=8,vertex_color=white,active=true,label=pt2_'+str(cntr)
     comms.notify('VIEW_POINT', pt2, pymoos.time())
     
     # Find other useful info on the obstacle
@@ -121,9 +149,7 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     
     if num_points:
     # t_lvl,type @ min_ang,max_ang,min_dist_ang @ min_ang_dist,max_ang_dist,min_dist
-    #   To convert the calculated angle to the one that relates to the one that
-    #   MOOS outputs, you have to use the formula: MOOS_ang = -(calc_ang-90)
-        poly = str(t_lvl)+','+str(obs_type)+'@'+str(np.mod(-(max_angle-heading)+90, 360))+','+str(np.mod(-(min_angle-heading)+90, 360))+','+str(np.mod(-(min_dist_angle-heading)+90, 360))+'@'+str(d_min)+','+str(d_max)+','+str(min_dist)
+        poly = str(t_lvl)+','+str(obs_type)+'@'+str(np.mod(ang4MOOS(max_angle), 360))+','+str(np.mod(ang4MOOS(min_angle), 360))+','+str(np.mod(ang4MOOS(min_dist_angle), 360))+'@'+str(d_min)+','+str(d_max)+','+str(min_dist)
     else:
         poly = "No points"    
     
@@ -343,14 +369,16 @@ def main():
                 
             # Remove highlighted line/polygon obstacles (shown as seglist) from 
             #   pMarineViewer
-            for i in range(1, counter_poly):
+            for ii in range(counter_poly, max_cntr_poly+1):
                 time.sleep(.002)
-                poly = 'x=1,y1,active=false,label=pt1_'+str(i)
-                poly = 'x=1,y1,active=false,label=pt2_'+str(i)
-                comms.notify('VIEW_POINT', poly, pymoos.time())
+                pt_1 = 'x=1000,y=1000,vertex_size=8,vertex_color=white,active=false,label=pt1_'+str(ii)
+                comms.notify('VIEW_POINT', pt_1, pymoos.time())
+                time.sleep(.01)
+                pt_2 = 'x=1,y=1,vertex_size=8,vertex_color=white,active=false,label=pt2_'+str(ii)
+                comms.notify('VIEW_POINT', pt_2, pymoos.time())
                 
             
-   
+   #==============================================================================
         # MOOS freaks out when nothing is posted to the DB so post this dummy
         #   variable to avoid this problem if nothing was posted during the l
         #   last cycle
