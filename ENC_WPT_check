@@ -1,0 +1,418 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jun 21 13:58:06 2016
+
+@author: mapper
+"""
+
+# Python-MOOS Bridge
+import pymoos
+
+# Used for delays
+import time
+
+# pyproj is a library that converts lat long coordinates into UTM
+import pyproj 
+
+# GDAL is a library that reads and writes shapefiles
+from osgeo import ogr
+
+# Numpy is a useful tool for 
+import numpy as np
+
+comms = pymoos.comms()
+
+#==============================================================================
+## Initialize some global variables
+#==============================================================================
+# Calculate the origin 
+p = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
+
+LatOrigin  = 43.071959194444446
+LongOrigin = -70.711610833333339 
+x_origin,y_origin = p(LongOrigin, LatOrigin)
+
+#==============================================================================
+## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
+#==============================================================================
+def on_connect():
+    comms.register('NAV_X',0)
+    comms.register('NAV_Y',0)
+    comms.register('NAV_HEADING',0)
+    comms.register('Next_WPT', 0)
+    comms.register('WPT_INDEX', 0)
+    comms.register('Buffer_dist', 0)
+    return True
+    
+def slopeintersept(x1,y1,x2,y2):
+    if x2 != x1:
+        
+        m = float(y2-y1)/float(x2-x1)
+        b = float(y1) - float(m*x1)
+        return m, b
+    else:
+        return 'vert_line', ''
+        
+def intercept(x1,y1,x2,y2, x3, y3, x4, y4): # pts 1 and 2 are WPTs
+    # Find slope intercept form for the first line
+    if x2 != x1:
+        m1, b1 = slopeintersept(x1,y1,x2,y2)
+        inf_slope_flag1 = False
+    else:
+        inf_slope_flag1 = True
+        
+    # Find slope intercept form for the second line
+    if x4 != x3:
+        m2, b2 = slopeintersept(x3,y3,x4,y4)
+        inf_slope_flag2 = False
+    else:
+        inf_slope_flag2 = True
+        
+    # Four Cases: 
+    #   slope != inf for both, 
+    #   slope != inf for fist line but slope = inf the second
+    #   slope = inf for fist line but slope != inf the second
+    #   slope = inf for both
+    if inf_slope_flag1 == False and inf_slope_flag2 == False:
+        if m1 == m2:
+            return 'Same', ''
+        x_int = (b2-b1)/(m1-m2)
+        y_int = (m1*x_int) + b1
+        
+    elif inf_slope_flag1 == False and inf_slope_flag2:
+        x_int = x3
+        y_int = (m1*x_int) + b1
+        
+    elif inf_slope_flag1 and inf_slope_flag2 == False:
+        x_int = x1
+        y_int = (m2*x_int) + b2
+    
+#    print 'y = %f * x + %f, y = %f * x + %f'%(m1, b1, m2, b2)    
+    
+    if inf_slope_flag2 and inf_slope_flag1:
+        if x4 == x1:
+            return 'Same', ''
+        else:
+            return 'None', ''
+    else:
+#        print 'x: %f, y: %f'%(x_int,y_int)
+        
+        # Check to see if the intercept lies on the line segment
+        if x1>x2:
+            pt1_x_small = x2
+            pt1_x_big = x1
+        else:
+            pt1_x_small = x1
+            pt1_x_big = x2
+        
+        if x3>x4:
+            pt2_x_small = x4
+            pt2_x_big = x3
+        else:
+            pt2_x_small = x3
+            pt2_x_big = x4
+        
+        if y1>y2:
+            pt1_y_small = y2
+            pt1_y_big = y1
+        else:
+            pt1_y_small = y1
+            pt1_y_big = y2
+        
+        if y3>y4:
+            pt2_y_small = y4
+            pt2_y_big = y3
+        else:
+            pt2_y_small = y3
+            pt2_y_big = y4
+        
+        if pt1_x_small <= x_int <= pt1_x_big and pt2_x_small <= x_int <= pt2_x_big and pt1_y_small <= y_int <= pt1_y_big and pt2_y_small <= y_int <= pt2_y_big:
+#            print '%f, %f' %(x_int, y_int)
+            return x_int, y_int
+        else:
+            return 'None', ''
+            
+def PolyLineIntercept(geom, WPT_x, WPT_y,prev_WPT_x,prev_WPT_y):
+    # Find crossing point
+    ring = geom.GetGeometryRef(0)
+    for j in range(ring.GetPointCount()):
+        pt_lon, pt_lat,z = ring.GetPoint(j)
+        pt_x, pt_y = p(pt_lon, pt_lat)
+        pt_x += -x_origin
+        pt_y += -y_origin
+        if j == 0:
+            prev_X, prev_Y,z = ring.GetPoint(ring.GetPointCount()-1)
+            prev_X += -x_origin
+            prev_Y += -y_origin
+        x_int, y_int = intercept(WPT_x, WPT_y,prev_WPT_x,prev_WPT_y, pt_x, pt_y, prev_X, prev_Y)
+            
+        # If there is a valid intersection return it
+        if ((x_int != 'None' or x_int != 'Same')and y_int != ''):
+            return x_int, y_int
+        # Store previous value                        
+        prev_X = pt_x
+        prev_Y = pt_y
+    return 'failed', ''
+         
+def latlongBuffer(x, y, des_buffer, UTM):
+    if UTM == 1:
+        orig_lon, orig_lat = p(x,y)
+    else:
+        orig_lon = x
+        orig_lat = y
+        
+    # Convert to lat/long
+    lon, lat= p(x+des_buffer, y+des_buffer, inverse=True)
+    
+    # Calculate lat/long buffer
+    buf_lon = lon - orig_lon
+    buf_lat = lat - orig_lat
+    
+    # Find max
+    if (buf_lon > buf_lat):
+        buf_max = buf_lon
+    else:
+        buf_max = buf_lat
+    
+    return buf_max
+    
+    
+#==============================================================================
+# This program uses the X and Y cooridinates from the ASV and filters out all 
+#   of the points from the ENC database that are in a predetermined search
+#   radius. It then outputs information need for obstacle avoidance to the
+#   MOOSDB as a string.
+#==============================================================================
+def main(): 
+    # Time Warp and Scaling factor constant
+    time_warp = 2
+    scaling_factor = 0.04*time_warp    
+    
+    # Set the timewarp and scale factor
+    pymoos.set_moos_timewarp(time_warp)
+    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
+    
+    file_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'  
+    
+    # Get the driver and open the point file first
+    driver = ogr.GetDriverByName('ESRI Shapefile')
+    ds = driver.Open(file_poly, 0)
+    
+    # There is only one layer in each file and we are just opening it to see how
+    #   features there are in the layer
+    layer = ds.GetLayer()
+    
+    # Register for desired variables
+    comms.set_on_connect_callback(on_connect);
+    comms.run('localhost',9000,'check')
+    NAV_X, NAV_Y, NAV_HEAD, Next_WPT, buff, WPT_INDEX = [],[],[],[],[],[]
+    
+    # Initialize Variables
+    second_iteration = False
+    buffer_dist = 20 
+    wpt_index = 0
+    check_within = False
+    x_int, y_int = [],[]
+    
+    while True:
+        time.sleep(.001)
+        ## Update the values of the ASV position, heading and next waypoint
+        info = comms.fetch()
+        # Store all values of the ASV's position and the information on the 
+        #   next waypoint
+        for x in info:
+            if x.is_double():
+                if x.name()=='NAV_X':
+                    NAV_X.append(x.double())
+                elif x.name()=='NAV_Y':
+                    NAV_Y.append(x.double())
+                elif x.name()=='NAV_HEADING':
+                    NAV_HEAD.append(x.double())
+                elif x.name()=='WPT_INDEX':
+                    WPT_INDEX.append(x.double())
+            elif x.is_string():
+                if x.name() == 'Next_WPT':
+                    Next_WPT.append(x.string())
+                elif (x.name() == 'Buffer_dist'):
+                    buff.append(x.string())
+                    
+        # Check to see if the buffer has changed
+        if len(buff)  != 0:
+            buffer_dist = float(buff.pop())
+            
+        # Check to see if there is a new position
+        if len(NAV_X) != 0 and len(NAV_Y)!= 0 and len(NAV_HEAD)!=0:
+            # Return the most recent information on the ASV's state
+            ASV_x = NAV_X.pop()
+            ASV_y = NAV_Y.pop()
+            ASV_head = NAV_HEAD.pop()
+            
+            # If the waypoint is within a polygon, then switch to the next
+            #   waypoint when it is comes within the buffer distance
+            if check_within:
+                for k in range(len(x_int)):
+                    dist = np.sqrt(np.square(x_int[k]-ASV_x) + np.square(y_int[k]-ASV_y))
+#                    print buffer_dist
+                    if dist <= buffer_dist:
+                        comms.notify('WPT_UPDATE', 'currix='+str(wpt_index+1))
+                        check_within = False
+                        prev_WPT_x = ASV_x
+                        prev_WPT_y = ASV_y
+                    
+            
+        # Check to see if there is a new waypoint index
+        if len(WPT_INDEX) != 0:
+            wpt_index = WPT_INDEX.pop()
+            
+        # When there is a new waypoint, we want to run this loop
+        if len(Next_WPT) != 0:
+            # Return the waypoint --> x,y
+            WPT = Next_WPT.pop()
+            check_intersection = False
+            check_within = False
+            x_int, y_int = [],[]
+            # The first value for Next_WPT is not a waypoint. It actually is 
+            #   "first_point". Therefore we will ignore the first iteration.
+            if WPT == 'first_point':
+                second_iteration = True
+            
+            # After the first waypoint has been hit, then every other value of
+            #   Next_WPT is valid. On the second iteration we will use the 
+            #   current position of the ASV as the previous waypoint. 
+            else:
+                # Previous waypoint is not valid until after the second
+                #   iteration. Therefore, we will use the current position of 
+                #   the ASV as the previous waypoint.
+                if second_iteration:
+                    # Set the current position to the ASV as the x,y coordinate
+                    #   of the previous waypoint
+                    prev_WPT_x = ASV_x
+                    prev_WPT_y = ASV_y
+                    
+                    # Parse waypoint string. It is in the format --> x,y
+                    WPT_x, WPT_y = WPT.split(",")
+                    
+                    # Convert the string to a float
+                    WPT_x = float(WPT_x)
+                    WPT_y = float(WPT_y)
+                    
+                    second_iteration = False
+                    
+                # After the first two iterations, we will be able to use the
+                #    previous waypoint value.
+                else:
+                    # Set the current position to the ASV as the x,y coordinate
+                    #   of the previous waypoint
+                    prev_WPT_x = WPT_x
+                    prev_WPT_y = WPT_y
+                    
+                    # Parse waypoint string. It is in the format --> x,y
+                    WPT_x, WPT_y = WPT.split(",")
+                    
+                    # Convert the string to a float
+                    WPT_x = float(WPT_x)
+                    WPT_y = float(WPT_y)
+                
+                # Convert the previous and current waypoints into lat and long
+                WPT_long, WPT_lat  = p(WPT_x+x_origin, WPT_y+y_origin, inverse=True)
+                prev_WPT_long, prev_WPT_lat  = p(prev_WPT_x+x_origin, prev_WPT_y+y_origin, inverse=True)                
+                
+                # Make GDAL point for the current waypoint
+                WPT_pnt = ogr.Geometry(ogr.wkbPoint)
+                WPT_pnt.AddPoint(WPT_long, WPT_lat)
+                
+                # Make GDAL point for the previous waypoint
+                prev_WPT_pnt = ogr.Geometry(ogr.wkbPoint)
+                prev_WPT_pnt.AddPoint(prev_WPT_long, prev_WPT_lat)
+                
+                # Make GDAL line string for the current and previous waypoints
+                WPT_line = ogr.Geometry(ogr.wkbLineString)
+                WPT_line.AddPoint(WPT_long, WPT_lat)
+                WPT_line.AddPoint(prev_WPT_long, prev_WPT_lat)
+                
+                ## Make GDAL polygon encapsulating the current and previous 
+                #   waypoints with a buffer around it
+                WPT_poly = ogr.Geometry(ogr.wkbPolygon)
+                
+                # Add a buffer around the waypoint
+                Buffer = 10
+                buf_max = latlongBuffer(WPT_pnt.GetX(), WPT_pnt.GetY(), Buffer, 0)
+                WPT_poly = WPT_line.Buffer(buf_max)
+#                print '%f, %f'%(buf_lon, buf_lat)
+                
+                # Allow the polygon to rotate and be correct
+#                angle = np.arctan2(WPT_lat-prev_WPT_lat, WPT_long-prev_WPT_long)
+#                add_x = buf_lon*np.sin(angle)
+#                add_y = buf_lat*np.cos(angle)
+#                
+#                # Add points to the ring
+#                WPT_ring.AddPoint(WPT_long-add_x, WPT_lat+add_y)
+#                WPT_ring.AddPoint(WPT_long+add_x, WPT_lat-add_y)
+#                WPT_ring.AddPoint(prev_WPT_long+add_x, prev_WPT_lat-add_y)
+#                WPT_ring.AddPoint(prev_WPT_long-add_x, prev_WPT_lat+add_y)
+#                WPT_ring.CloseRings()
+#                WPT_poly.AddGeometry(WPT_ring)
+                
+#                 # Show the flag polygon in pMarineViewer
+#                pt1,pt2 = p(WPT_long-add_x, WPT_lat+add_y)
+#                pt3,pt4 = p(WPT_long+add_x, WPT_lat-add_y)
+#                pt5,pt6 = p(prev_WPT_long+add_x, prev_WPT_lat-add_y)
+#                pt7,pt8 = p(prev_WPT_long-add_x, prev_WPT_lat+add_y)
+#                
+#                poly = 'pts={'+str(pt1-x_origin)+','+str(pt2-y_origin)+':'+str(pt3-x_origin)+','+str(pt4-y_origin)+':'+str(pt5-x_origin)+','+str(pt6-y_origin)+':'+str(pt7-x_origin)+','+str(pt8-y_origin)+'},label=check,edge_color=blue'
+#                comms.notify('VIEW_POLYGON',poly)              
+                
+                ## Check to see if the next waypoint/path is valid
+                feature = layer.GetFeature(0)
+                for i in range (1,layer.GetFeatureCount()):
+                    geom = feature.GetGeometryRef()
+                    
+                    # Check to see if the next waypoint is within the polygon
+                    #   obstacle
+                    check1 = WPT_pnt.Within(geom)
+                    if check1 == True:
+                        # Get the X and Y intercepts
+                        cur_x_int, cur_y_int = PolyLineIntercept(geom, WPT_x, WPT_y,prev_WPT_x,prev_WPT_y)
+                        check_within = check1
+                        
+                        print str(cur_x_int) +', '+str(cur_y_int)
+                        if isinstance(cur_x_int, float):
+                            comms.notify('VIEW_POINT','x='+str(cur_x_int) +','+'y='+str(cur_y_int)+'vertex_size=6.5,vertex_color=red,active=true,label=int')
+                        x_int.append(cur_x_int)
+                        y_int.append(cur_y_int)
+                    
+                    # Check to see if the planned path will intersect the 
+                    #   polygon obstacle
+                    check2 = WPT_poly.Intersect(geom)
+                    if check2 == True:
+                        check_intersection = check2
+                    
+                    # Get next feature
+                    feature = layer.GetFeature(i)
+                
+                # Update flags and print out status message
+                comms.notify('VALID_WPT', str(check_within))
+                if check_within:
+                    print "ERROR: Next Waypoint is NOT Valid"
+                else:
+                    print "Next Waypoint is Valid"
+                        
+                comms.notify('VALID_PATH', str(check_intersection))
+                    
+                if check_intersection:
+                    print "ERROR: Planned path intersects obstacles"
+                else:
+                    print "Planned path is  Valid"
+                    
+        
+        #======================================================================
+        # MOOS freaks out when nothing is posted to the DB so post this dummy
+        #   variable to avoid this problem if nothing was posted during the
+        #   last cycle.
+        #======================================================================
+        else:
+            comms.notify('dummy_var','')
+            
+    
+if __name__ == "__main__":
+    main()   
