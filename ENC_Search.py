@@ -17,7 +17,7 @@ import pyproj
 # GDAL is a library that reads and writes shapefiles
 from osgeo import ogr
 
-# Numpy is a useful tool for 
+# Numpy is a useful tool for mathematical operations 
 import numpy as np
 
 comms = pymoos.comms()
@@ -26,19 +26,21 @@ comms = pymoos.comms()
 ## Initialize some global variables
 #==============================================================================
 # Calculate the origin 
-p = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
+LatLon2UTM = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
 
 LatOrigin  = 43.071959194444446
 LongOrigin = -70.711610833333339 
-x_origin,y_origin = p(LongOrigin, LatOrigin)
+x_origin,y_origin = LatLon2UTM(LongOrigin, LatOrigin)
 
 #==============================================================================
 ## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
 #==============================================================================
 def on_connect():
-    comms.register('NAV_X',1)
-    comms.register('NAV_Y',1)
-    comms.register('NAV_HEADING',1)
+    comms.register('NAV_X', 0.2)
+    comms.register('NAV_Y', 0.2)
+    comms.register('NAV_HEADING', 0.2)
+#    pymoos.get_moos_timewarp()
+#    comms.get_comms_control_timewarp_scale_factor()
     return True
     
 #==============================================================================
@@ -47,13 +49,76 @@ def on_connect():
 #==============================================================================
 def ang4MOOS(angle):
     return -(angle-90)
+
+#==============================================================================
+# This calculates the intersection of a polygon and the search polygon and 
+#   outputs all vetices that are within the search area as well as the ones 
+#   that conect two different segments of a concave polygon that are within the
+#   search area.
+#==============================================================================
+def poly_intersect(search_poly, poly):
+    # Initialize the necessary geometries
+    pnt = ogr.Geometry(ogr.wkbPoint)
+    outside = ogr.Geometry(ogr.wkbLineString)
+    ring = ogr.Geometry(ogr.wkbLinearRing)
+    
+    ring = poly.GetGeometryRef(0)    
+    
+    # Temp variables for if there are more than one intersection
+    out = False
+    first_inside = False
+    
+    # Get the threat level and type of the obstacle and store it
+    poly_info = str(poly.GetField(0))+','+ str(poly.GetField(1))
+    
+    # Initialize strings and counter
+    obs_poly_str = ''
+    poly_str = ''
+    num_pnts = 0
+
+    # Cycle through the points along the line to determine if they fall within
+    #   the polygon
+    for i in range(ring.GetPointCount()):
+        x,y,z = ring.GetPoint(i)
+        pnt.AddPoint(x,y)
+        # If the point is within the polygon save it
+        if pnt.Within(search_poly):
+            # Variable that states if you had the first point inside or not
+            first_inside = True 
+            # If the last point was inside the polygon, save it without other 
+            #   processing            
+            if out == False: 
+                poly_str+= str(x)+','+str(y)+poly_info
+                num_pnts +=1
+                
+            # If the previous point was outside the polygon then add the info  
+            #   on the original line to the string
+            else: 
+                for ii in range(outside.GetPointCount()):
+                    x,y,z = outside.GetPoint(ii)
+                    poly_str+= str(x)+','+str(y)+poly_info
+                    num_pnts +=1
+                outside = ogr.Geometry(ogr.wkbLineString)
+                out = False
+        # If the  point is not within the polygon then add to a line describing
+        #   the line outside of the polygon in case it intersects more than 
+        #   once
+        else: 
+            if out == False:
+                out = True
+            if first_inside == True:
+                outside.AddPoint(x,y)
+    
+    # Add in the number of vertices that are in the search area
+    obs_poly_str = str(num_pnts)+':'+poly_str
+    return obs_poly_str
     
 #==============================================================================
 # Function to determine what the important information should be outputed for
 #   each polygon in the search area. This function only works if there are 
 #   vertices of the polygon in the search area.
 #==============================================================================
-def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
+def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     if (TF_intersect):
         geom = intersect
     else:
@@ -83,13 +148,13 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     for i in range (0, num_points):
         lon = ring.GetX(i)
         lat = ring.GetY(i)
-        ptx, pty = p(lon, lat)
+        ptx, pty = LatLon2UTM(lon, lat)
         
         ptx += -x_origin
         pty += -y_origin
         
         d = np.sqrt(np.square(ASV_X-ptx)+np.square(ASV_Y-pty))
-        angle = np.arctan2(pty-ASV_Y,ptx-ASV_X)*180/np.pi      
+        angle = np.arctan2(ASV_Y-pty, ASV_X-ptx)*180/np.pi      
         
         # There is one major issue with finding the minimum and maximum angles.
         #   It is that when the angle switches from 360 to 0. This will lead to
@@ -137,19 +202,22 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
             y_small = pty
         
     # Post these points to pMarineViewer
-    pt1 = 'x='+str(x1)+',y='+str(y1)+',vertex_size=8,vertex_color=white,active=true,label=pt1_'+str(cntr)
-    comms.notify('VIEW_POINT', pt1, pymoos.time())
+    pt1 = 'x='+str(x1)+',y='+str(y1)+',vertex_size=6.5,vertex_color=white,active=true,label=pt1_'+str(cntr)
+    comms.notify('VIEW_POINT', pt1)
     time.sleep(.001)
-    pt2 = 'x='+str(x2)+',y='+str(y2)+',vertex_size=8,vertex_color=white,active=true,label=pt2_'+str(cntr)
-    comms.notify('VIEW_POINT', pt2, pymoos.time())
+    pt2 = 'x='+str(x2)+',y='+str(y2)+',vertex_size=6.5,vertex_color=white,active=true,label=pt2_'+str(cntr)
+    comms.notify('VIEW_POINT', pt2)
+    pt3 = 'x='+str(x_small)+',y='+str(y_small)+',vertex_size=6.5,vertex_color=cornflowerblue ,active=true,label=pt3_'+str(cntr)
+    comms.notify('VIEW_POINT', pt3)
     
     # Find other useful info on the obstacle
     t_lvl = feature.GetField(0)
     obs_type = feature.GetField(1)
     
-    if num_points:
+    if num_points>0:
     # t_lvl,type @ min_ang,max_ang,min_dist_ang @ min_ang_dist,max_ang_dist,min_dist
-        poly = str(t_lvl)+','+str(obs_type)+'@'+str(np.mod(ang4MOOS(max_angle), 360))+','+str(np.mod(ang4MOOS(min_angle), 360))+','+str(np.mod(ang4MOOS(min_dist_angle), 360))+'@'+str(d_min)+','+str(d_max)+','+str(min_dist)
+        poly = str(t_lvl)+','+str(obs_type)+'@'+str(x1)+','+str(y1)+','+str(x_small)+','+str(y_small)+','+str(x2)+','+str(y2)+'@'+str(d_min)+','+str(d_max)+','+str(min_dist)
+#        +str(np.mod(ang4MOOS(max_angle), 360))+','+str(np.mod(ang4MOOS(min_angle), 360))+','+str(np.mod(ang4MOOS(min_dist_angle), 360))
     else:
         poly = "No points"    
     
@@ -162,8 +230,14 @@ def polygon(ASV_X,ASV_Y, heading, feature, intersect, TF_intersect, cntr):
 #   MOOSDB as a string.
 #==============================================================================
 def main():
+    # Time Warp and Scaling factor constant
+    time_warp = 2
+    scaling_factor = 0.04*time_warp
     
-
+    # Set the timewarp and scale factor
+    pymoos.set_moos_timewarp(time_warp)
+    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
+    
     #easily mark all of the output and input files
     file_pnt = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_pnt2.shp'  
     file_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'  
@@ -173,26 +247,32 @@ def main():
     ds = driver.Open(file_pnt, 0)
     ds_poly = driver.Open(file_poly, 0) # open Polygon File
     
-    # There is only one layer in each file and we are just opening it to see how
-    #   features there are in the layer
+    # There is only one layer in each file
     layer = ds.GetLayer()
     layer_poly = ds_poly.GetLayer() # Open the only layer in the Polygon File
     
-    # Register for NAV_X and NAV_Y
-    comms.set_on_connect_callback(on_connect);
+    # Register for desired variables
+    comms.set_on_connect_callback(on_connect)
+    
+
+    print 'Time Warp %f'%time_warp
+    
+    # Connect to the server
     comms.run('localhost',9000,'Search')
+    
     NAV_X, NAV_Y, NAV_HEAD = [],[],[]
     X = Y = 0
     max_cntr = 1
     max_cntr_poly = 1
     while True:
+        NAV_X, NAV_Y, NAV_HEAD = [],[],[]
         time.sleep(.001)
         ## Update the values of the ASV position (x,y) - they are in meters
         info = comms.fetch()
         # Store all values of the ASV's position
         for x in info:
             if x.is_double():
-                print x.name()+ ': ' +str(x.double())
+#                print x.name()+ ': ' +str(x.double())
                 if x.name()=='NAV_X':
                     NAV_X.append(x.double())
                 elif x.name()=='NAV_Y':
@@ -212,45 +292,55 @@ def main():
                 
             # Create the baseline for the search area polygon 
             ring_filter = ogr.Geometry(ogr.wkbLinearRing)
-            poly_filter = ogr.Geometry(ogr.wkbPolygon)            
-            x_norm = NAV_X.pop()
-            y_norm = NAV_Y.pop()
-            heading = NAV_HEAD.pop()
+            poly_filter = ogr.Geometry(ogr.wkbPolygon)
+            
+            # Store most recent value of X, Y, and Heading
+            x_norm = NAV_X[NAV_X.__len__()-1]
+            y_norm = NAV_Y[NAV_Y.__len__()-1]
+            heading = NAV_HEAD[NAV_HEAD.__len__()-1]
+            NAV_X, NAV_Y, NAV_HEAD = [],[],[]
             X = x_norm+x_origin
             Y = y_norm+y_origin
+            cor_head = ang4MOOS(heading)# corrected heading to convert to normal 
             
             # Search area should be a function of the vessel size and current 
             #   speed
-            search_dis = 50            
+            search_dis = 50
+            
+            # Calculate the correct corrections to have the search area spin 
+            #   rotate with respect to the ASV's heading
+            theta = 45-np.mod(cor_head,90) # Degrees
+            add_sin = search_dis*np.sqrt(2)*np.sin(theta*np.pi/180)
+            add_cos = search_dis*np.sqrt(2)*np.cos(theta*np.pi/180)
             
             # Convert the positions to latitude and longitude
-            E_long_search,N_lat_search= p(X+search_dis, Y+search_dis, inverse=True)
-            W_long_search,S_lat_search= p(X-search_dis, Y-search_dis, inverse=True)
-#            print 'N_lat: %f, E_long: %f' %(N_lat_search, E_long_search)
-#            print 'S_lat: %f, W_long: %f' %(S_lat_search, W_long_search)
+            pt1x,pt1y = LatLon2UTM(X+add_sin, Y+add_cos, inverse=True)
+            pt2x,pt2y = LatLon2UTM(X-add_cos, Y+add_sin, inverse=True)
+            pt3x,pt3y = LatLon2UTM(X-add_sin, Y-add_cos, inverse=True)
+            pt4x,pt4y = LatLon2UTM(X+add_cos, Y-add_sin, inverse=True)
             
             # Build a ring of the points for the search area polygon
-            ring_filter.AddPoint(W_long_search, N_lat_search)
-            ring_filter.AddPoint(E_long_search, N_lat_search)
-            ring_filter.AddPoint(E_long_search, S_lat_search)
-            ring_filter.AddPoint(W_long_search, S_lat_search)
-            ring_filter.AddPoint(W_long_search, N_lat_search)
+            ring_filter.AddPoint(pt1x,pt1y)
+            ring_filter.AddPoint(pt2x,pt2y)
+            ring_filter.AddPoint(pt3x,pt3y)
+            ring_filter.AddPoint(pt4x,pt4y)
+            ring_filter.CloseRings()
             poly_filter.AddGeometry(ring_filter) # Add the ring to the previously created polygon         
             
             # Show the Search Radius Polygon on pMarnineViewer
-            s_poly_vert = 'pts={'+str(x_norm-search_dis)+','+ str(y_norm+search_dis)+':'+ str(x_norm+search_dis)+','+str(y_norm+search_dis)+':'+ str(x_norm+search_dis)+','+str(y_norm-search_dis)+':' +str(x_norm-search_dis)+','+str(y_norm-search_dis)+'},'
-            comms.notify('VIEW_POLYGON', s_poly_vert+'label=Search,edge_size=10,vertex_size=1,edge_color=red', pymoos.time())
+            s_poly_vert = 'pts={'+str(x_norm+add_sin)+','+ str(y_norm+add_cos)+':'+ str(x_norm-add_cos)+','+str(y_norm+add_sin)+':'+ str(x_norm-add_sin)+','+str(y_norm-add_cos)+':' +str(x_norm+add_cos)+','+str(y_norm-add_sin)+'},'
+            comms.notify('VIEW_POLYGON', s_poly_vert+'label=Search,edge_size=10,vertex_size=1,edge_color=red',)
+            
             # Filter out data to determine the search area and print out the 
             #   number of potential hazards in the imediate vacinity 
-            feature_poly = layer_poly.GetFeature(1)
             layer.SetSpatialFilter(poly_filter)
             layer.SetAttributeFilter("t_lvl!=0")
             layer_poly.SetSpatialFilter(poly_filter)
             layer_poly.SetAttributeFilter("t_lvl!=0")
             feature = layer.GetNextFeature()
-#            feature_poly = layer_poly.GetFeature(0)
-            print 'Number of Hazards (point): %d' %layer.GetFeatureCount()
-            print 'Number of Hazards (polygon): %d \n' %layer_poly.GetFeatureCount()
+            feature_poly = layer_poly.GetNextFeature()#GetFeature(0)
+#            print 'Number of Hazards (point): %d' %layer.GetFeatureCount()
+#            print 'Number of Hazards (polygon): %d \n' %layer_poly.GetFeatureCount()
             
             # This counter is used to count the number of features in the 
             #   search radius. This is then used to determine if any of the old
@@ -273,12 +363,12 @@ def main():
             while feature:
                 time.sleep(.001)
                 geom_point = feature.GetGeometryRef()
-                x,y = p(geom_point.GetX(), geom_point.GetY())
+                x,y = LatLon2UTM(geom_point.GetX(), geom_point.GetY())
                 new_x = x-x_origin
                 new_y = y-y_origin
                 pos = 'x='+str(new_x)+',y='+str(new_y)
                 poly_search = 'format=radial,'+pos+',radius=25,pts=8,edge_size=5,vertex_size=2,edge_color=aquamarine,vertex_color=aquamarine,label='+str(counter)
-                comms.notify('VIEW_POLYGON', poly_search, pymoos.time())
+                comms.notify('VIEW_POLYGON', poly_search)
                                 
                 # Store information for the obstacle to be used later to post to the MOOSDB
                 # x,y,t_lvl,type 
@@ -292,22 +382,20 @@ def main():
                 # Go to the next feature and increment the counter
                 feature = layer.GetNextFeature() 
                 counter += 1
-            #print 'Number of Hazards (point): %d, %d' %(layer.GetFeatureCount(), num_obs)
             # Output to the MOOSDB a list of obstacles
             #   ASV_X,ASV_Y : # of Obstacles : x,y,t_lvl,type : x,y,t_lvl,type : ...
-#            if num_obs != 0:
             obstacles = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(num_obs)+':'+obs_pos
-            comms.notify('Obstacles', obstacles, pymoos.time())            
+            comms.notify('Obstacles', obstacles)            
             # Determine if a new polygon was used
             if max_cntr < counter:
                 max_cntr = counter  
                 
             # Remove highlighted point obstacles (shown as polygons) from 
             #   pMarineViewer
-            for i in range(counter, max_cntr):
+            for i in range(counter+1, max_cntr+2):
                 time.sleep(.002)
                 poly = 'format=radial,x= 0,y=0,radius=25,pts=8,edge_size=5,vertex_size=2,active=false,label='+str(i)
-                comms.notify('VIEW_POLYGON', poly, pymoos.time())
+                comms.notify('VIEW_POLYGON', poly)
                 
 ###############################################################################
 ##########                 Cycle through the polygons                ##########
@@ -315,7 +403,9 @@ def main():
             # Initialize the polygon strings
             poly_str = ''
             poly_info = ''
-            feature_poly = layer_poly.GetNextFeature()
+            point = ogr.Geometry(ogr.wkbPoint)
+            point.AddPoint(-70.718287193807441, 43.081495831972077)
+#            feature_poly = layer_poly.GetNextFeature()
             while feature_poly:
                 geom_poly = feature_poly.GetGeometryRef() # Polygon from shapefile
                 # Get the interesection of the polygon from the shapefile and
@@ -325,6 +415,8 @@ def main():
                 # Get the ring of that intersection polygon
                 p_ring = intersection_poly.GetGeometryRef(0) 
                 
+#                c = geom_poly.Centroid()                
+#                print c
                 # There are two potential cases - There are vertices of the 
                 #   polygon within the search area and There are no vertices of
                 #   the polygon within the search area.
@@ -333,12 +425,18 @@ def main():
                 #   we will give the polygon string function the intersection
                 #   of the polygon and the search area
                 if p_ring:
-                    poly_str = polygon(x_norm, y_norm, heading, feature_poly, intersection_poly, True,counter_poly)
+                    if point.Within(geom_poly):
+                        poly_str = "No points"
+                    else:
+                        poly_str = polygon(x_norm, y_norm, heading, feature_poly, intersection_poly, True,counter_poly)
                     
                 # Case 2: there are no points in the the search window, 
                 #   therefore we are temperarily giving the entire polygon to 
                 #   the polygon function.
                 else:
+#                    if point.Within(geom_poly):
+#                        poly_str = "No points"
+#                    else:
                     poly_str = polygon(x_norm, y_norm, heading, feature_poly, False, False, counter_poly)
    
                 # If it is not the first polygon, then add a '!' to the end of 
@@ -357,12 +455,12 @@ def main():
                 
 
             # Post an update if there are polygon obstacles
-            if (layer_poly.GetFeatureCount()>1):
-                poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(layer_poly.GetFeatureCount()-1)+':'+poly_info
-                comms.notify('Poly_Obs', poly_obs, pymoos.time())  
-            else:
-                poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(layer_poly.GetFeatureCount()-1)
-                comms.notify('Poly_Obs', poly_obs, pymoos.time())
+            if (layer_poly.GetFeatureCount()>0):
+                poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(counter_poly-1)+':'+poly_info
+                comms.notify('Poly_Obs', poly_obs)  
+#            else:
+#                poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(counter_poly-2)
+#                comms.notify('Poly_Obs', poly_obs)
             # Determine if a new polygon was used
             if max_cntr_poly < counter_poly:
                 max_cntr_poly = counter_poly    
@@ -372,18 +470,20 @@ def main():
             for ii in range(counter_poly, max_cntr_poly+1):
                 time.sleep(.002)
                 pt_1 = 'x=1000,y=1000,vertex_size=8,vertex_color=white,active=false,label=pt1_'+str(ii)
-                comms.notify('VIEW_POINT', pt_1, pymoos.time())
-                time.sleep(.01)
+                comms.notify('VIEW_POINT', pt_1)
+                time.sleep(.002)
                 pt_2 = 'x=1,y=1,vertex_size=8,vertex_color=white,active=false,label=pt2_'+str(ii)
-                comms.notify('VIEW_POINT', pt_2, pymoos.time())
-                
+                comms.notify('VIEW_POINT', pt_2)
+                time.sleep(.002)
+                pt_3 = 'x=1,y=1,vertex_size=8,vertex_color=white,active=false,label=pt3_'+str(ii)
+                comms.notify('VIEW_POINT', pt_3)
             
-   #==============================================================================
+#==============================================================================
         # MOOS freaks out when nothing is posted to the DB so post this dummy
         #   variable to avoid this problem if nothing was posted during the l
         #   last cycle
         else:
-            comms.notify('dummy_var','',pymoos.time())
+            comms.notify('dummy_var','')
 
 if __name__ == "__main__":
     main()        
