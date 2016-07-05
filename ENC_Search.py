@@ -254,9 +254,6 @@ def main():
     # Register for desired variables
     comms.set_on_connect_callback(on_connect)
     
-
-    print 'Time Warp %f'%time_warp
-    
     # Connect to the server
     comms.run('localhost',9000,'Search')
     
@@ -338,9 +335,9 @@ def main():
             layer_poly.SetSpatialFilter(poly_filter)
             layer_poly.SetAttributeFilter("t_lvl!=0")
             feature = layer.GetNextFeature()
-            feature_poly = layer_poly.GetNextFeature()#GetFeature(0)
-#            print 'Number of Hazards (point): %d' %layer.GetFeatureCount()
-#            print 'Number of Hazards (polygon): %d \n' %layer_poly.GetFeatureCount()
+            feature_poly = layer_poly.GetNextFeature()
+            print 'Number of Hazards (point): %d' %layer.GetFeatureCount()
+            print 'Number of Hazards (polygon): %d \n' %layer_poly.GetFeatureCount()
             
             # This counter is used to count the number of features in the 
             #   search radius. This is then used to determine if any of the old
@@ -392,7 +389,7 @@ def main():
                 
             # Remove highlighted point obstacles (shown as polygons) from 
             #   pMarineViewer
-            for i in range(counter+1, max_cntr+2):
+            for i in range(counter, max_cntr):
                 time.sleep(.002)
                 poly = 'format=radial,x= 0,y=0,radius=25,pts=8,edge_size=5,vertex_size=2,active=false,label='+str(i)
                 comms.notify('VIEW_POLYGON', poly)
@@ -458,9 +455,7 @@ def main():
             if (layer_poly.GetFeatureCount()>0):
                 poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(counter_poly-1)+':'+poly_info
                 comms.notify('Poly_Obs', poly_obs)  
-#            else:
-#                poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(counter_poly-2)
-#                comms.notify('Poly_Obs', poly_obs)
+                
             # Determine if a new polygon was used
             if max_cntr_poly < counter_poly:
                 max_cntr_poly = counter_poly    
