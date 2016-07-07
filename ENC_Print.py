@@ -10,9 +10,38 @@ import pyproj
 # GDAL is a library that reads and writes shapefiles
 from osgeo import ogr
 
-# MOOS libraries
+# Python-MOOS Bridge
 import pymoos
+
+# Used for delays
 import time
+
+#==============================================================================
+# Initialize Globals
+#==============================================================================
+comms = pymoos.comms()
+### FIX: Generalize this to the utm zone of LatOrigin/LongOrigin ###
+LonLat2UTM = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
+
+LatOrigin  = 43.071959194444446
+LongOrigin = -70.711610833333339 
+x_origin,y_origin = LonLat2UTM(LongOrigin, LatOrigin)
+
+#==============================================================================
+# Convert MOOS x,y to Longitude and Latitude
+#==============================================================================
+def MOOSxy2LonLat(x, y):
+    lat,lon = LonLat2UTM(x+x_origin, y+y_origin, inverse=True)
+    return lat,lon
+    
+#==============================================================================
+# Convert Longitude and Latitude to MOOS x,y
+#==============================================================================
+def LonLat2MOOSxy(lat, lon):
+    x,y = LonLat2UTM(lat, lon)
+    x += -x_origin
+    y += -y_origin
+    return x,y
 
 #=============================================================================#
 # This code determines if each point along a line is within a polygon and if it
@@ -67,21 +96,19 @@ def poly_line_intersect(poly, line):
 #   obstacles onto the pMarineViewer. The obstacles are printed as points with
 #   the different colors relating to the threat level of the obstacle.
 #=============================================================================#
-comms = pymoos.comms()
-
 def on_connect():
     comms.register('VIEW_POLYGON',0)
     comms.register('VIEW_POINT',0)
     return True
 
 def main():
-    t = pymoos.time()
-    # Calculate the origin 
-    p = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
+    # Time Warp and Scaling factor constant
+    time_warp = 2
+    scaling_factor = 0.04*time_warp    
     
-    LatOrigin  = 43.071959194444446
-    LongOrigin = -70.711610833333339 
-    x_origin,y_origin = p(LongOrigin, LatOrigin)
+    # Set the timewarp and scale factor
+    pymoos.set_moos_timewarp(time_warp)
+    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
     
     comms.set_on_connect_callback(on_connect);
     comms.run('localhost',9000,'print')
@@ -131,16 +158,11 @@ def main():
     while feature:    
         geom = feature.GetGeometryRef()
         t_lvl = feature.GetField(0) # Get the Threat Level for that feature
-        obs_type = feature.GetField(1) # Get the type of obstacle that the feature is
         time.sleep(.02) # Don't make it faster or it wont print all of the points
-        
-        # Create the VIEW_MARKER string
-        #cntr = cntr+1
-        x,y = p(geom.GetX(), geom.GetY())
-        new_x = x-x_origin
-        new_y = y-y_origin
+
+        # Convert the MOOS x,y position to Lat/Long and store it
+        new_x, new_y = LonLat2MOOSxy (geom.GetX(), geom.GetY())
         location = 'x='+str(new_x)+',y='+str(new_y)+','
-        label = 'label='#+obs_type# +' t_lvl: '+ str(t_lvl)
      
         # Change the Color of the point based on the Threat Level
         if t_lvl == 5:
@@ -165,7 +187,7 @@ def main():
         cnt = 1+cnt
         
         # Print the point
-        comms.notify('VIEW_POINT', m, pymoos.time()+t)
+        comms.notify('VIEW_POINT', m)
 #        print pymoos.time()-t
         feature = layer.GetNextFeature()
         
@@ -200,8 +222,8 @@ def main():
             # Cycle through the vertices and store them as a string
             for p1 in xrange(points):
                 lon, lat, z = p_ring.GetPoint(p1)
-                p_x,p_y = p(lon, lat)
-                vertex += str(p_x-x_origin) + ','+ str(p_y-y_origin)
+                p_x,p_y = LonLat2MOOSxy (lon, lat)
+                vertex += str(p_x) + ','+ str(p_y)
                 if (p1!=points-1):
                     vertex += ':'
             t_lvl = feature.GetField(0) # Get threat level
@@ -222,7 +244,7 @@ def main():
                 
             
             if points != 0:
-                comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color, pymoos.time()+t)
+                comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color)
 #            print pymoos.time()+t
         feature = layer.GetNextFeature()
         
@@ -252,8 +274,8 @@ def main():
         # Cycle through the vertices and store them as a string
         for p2 in xrange(points):
             lon, lat, z = intersection_line.GetPoint(p2)
-            p_x,p_y = p(lon, lat)
-            vertex += str(p_x-x_origin) + ','+ str(p_y-y_origin)
+            p_x,p_y = LonLat2MOOSxy (lon, lat)
+            vertex += str(p_x) + ','+ str(p_y)
             if (p2!=points-1):
                 vertex += ':'
         t_lvl = feature.GetField(0) # Get threat level
@@ -272,42 +294,9 @@ def main():
         elif t_lvl == 0:
             color = 'edge_color=green,vertex_color=green'
         if points != 0:
-            comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color, pymoos.time()+t)
+            comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color)
 #            print pymoos.time()-t
         feature = layer.GetNextFeature()
         
 if __name__ == "__main__":
     main()
-
-        # Change the Type of the marker based on the type of obstacle
-#        if obs_type == 'Rock':
-#            color = 'vertex_color=red,'
-#            label = label+obs_type
-#            
-#        elif obs_type == 'Soundg':
-#            label = label+'S'
-#            color = 'vertex_color=yellow,'
-#            
-#        elif obs_type == 'OBST':
-#            label = label+obs_type
-#            color = 'vertex_color=orange,'
-#            
-#        elif obs_type == 'Wreck':
-#            label = label+obs_type
-#            color = 'vertex_color=pink,'
-#            
-#        elif obs_type == 'Land':
-#            label = label+obs_type
-#            color = 'vertex_color=green,'
-#        
-#        elif obs_type in ['BOYISD', 'BOYSAW','BOYSPP', 'BOYLAT']:
-#            label = label+obs_type
-#            color = 'vertex_color=purple,'        
-#        
-#        elif obs_type in ['BCNLAT', 'BCNSPP']:
-#            label = label+obs_type
-#            color = 'vertex_color=black,'
-#            
-#        elif obs_type == 'Dock':
-#            label = label+obs_type
-#            color = 'vertex_color=brown,'

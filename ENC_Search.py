@@ -26,11 +26,27 @@ comms = pymoos.comms()
 ## Initialize some global variables
 #==============================================================================
 # Calculate the origin 
-LatLon2UTM = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
+LonLat2UTM = pyproj.Proj(proj='utm', zone=19, ellps='WGS84')
 
 LatOrigin  = 43.071959194444446
 LongOrigin = -70.711610833333339 
-x_origin,y_origin = LatLon2UTM(LongOrigin, LatOrigin)
+x_origin,y_origin = LonLat2UTM(LongOrigin, LatOrigin)
+
+#==============================================================================
+# Convert MOOS x,y to Longitude and Latitude
+#==============================================================================
+def MOOSxy2LonLat(x, y):
+    lat,lon = LonLat2UTM(x+x_origin, y+y_origin, inverse=True)
+    return lat,lon
+    
+#==============================================================================
+# Convert Longitude and Latitude to MOOS x,y
+#==============================================================================
+def LonLat2MOOSxy(lat, lon):
+    x,y = LonLat2UTM(lat, lon)
+    x += -x_origin
+    y += -y_origin
+    return x,y  
 
 #==============================================================================
 ## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
@@ -39,8 +55,6 @@ def on_connect():
     comms.register('NAV_X', 0.2)
     comms.register('NAV_Y', 0.2)
     comms.register('NAV_HEADING', 0.2)
-#    pymoos.get_moos_timewarp()
-#    comms.get_comms_control_timewarp_scale_factor()
     return True
     
 #==============================================================================
@@ -148,11 +162,8 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     for i in range (0, num_points):
         lon = ring.GetX(i)
         lat = ring.GetY(i)
-        ptx, pty = LatLon2UTM(lon, lat)
-        
-        ptx += -x_origin
-        pty += -y_origin
-        
+        ptx, pty = LonLat2MOOSxy(lon, lat)
+
         d = np.sqrt(np.square(ASV_X-ptx)+np.square(ASV_Y-pty))
         angle = np.arctan2(ASV_Y-pty, ASV_X-ptx)*180/np.pi      
         
@@ -226,7 +237,7 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
 #==============================================================================
 # This program uses the X and Y cooridinates from the ASV and filters out all 
 #   of the points from the ENC database that are in a predetermined search
-#   radius. It then outputs information need for obstacle avoidance to the
+#   radius. It then outputs information needed for obstacle avoidance to the
 #   MOOSDB as a string.
 #==============================================================================
 def main():
@@ -242,14 +253,14 @@ def main():
     file_pnt = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_pnt2.shp'  
     file_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'  
     
-    # Get the driver and open the point file first
+    # Get the driver and open the point and polygon files
     driver = ogr.GetDriverByName('ESRI Shapefile')
     ds = driver.Open(file_pnt, 0)
     ds_poly = driver.Open(file_poly, 0) # open Polygon File
     
     # There is only one layer in each file
     layer = ds.GetLayer()
-    layer_poly = ds_poly.GetLayer() # Open the only layer in the Polygon File
+    layer_poly = ds_poly.GetLayer()
     
     # Register for desired variables
     comms.set_on_connect_callback(on_connect)
@@ -292,12 +303,10 @@ def main():
             poly_filter = ogr.Geometry(ogr.wkbPolygon)
             
             # Store most recent value of X, Y, and Heading
-            x_norm = NAV_X[NAV_X.__len__()-1]
-            y_norm = NAV_Y[NAV_Y.__len__()-1]
+            X = NAV_X[NAV_X.__len__()-1]
+            Y = NAV_Y[NAV_Y.__len__()-1]
             heading = NAV_HEAD[NAV_HEAD.__len__()-1]
             NAV_X, NAV_Y, NAV_HEAD = [],[],[]
-            X = x_norm+x_origin
-            Y = y_norm+y_origin
             cor_head = ang4MOOS(heading)# corrected heading to convert to normal 
             
             # Search area should be a function of the vessel size and current 
@@ -311,21 +320,21 @@ def main():
             add_cos = search_dis*np.sqrt(2)*np.cos(theta*np.pi/180)
             
             # Convert the positions to latitude and longitude
-            pt1x,pt1y = LatLon2UTM(X+add_sin, Y+add_cos, inverse=True)
-            pt2x,pt2y = LatLon2UTM(X-add_cos, Y+add_sin, inverse=True)
-            pt3x,pt3y = LatLon2UTM(X-add_sin, Y-add_cos, inverse=True)
-            pt4x,pt4y = LatLon2UTM(X+add_cos, Y-add_sin, inverse=True)
+            pt1_lon,pt1_lat = MOOSxy2LonLat(X+add_sin, Y+add_cos)
+            pt2_lon,pt2_lat = MOOSxy2LonLat(X-add_cos, Y+add_sin)
+            pt3_lon,pt3_lat = MOOSxy2LonLat(X-add_sin, Y-add_cos)
+            pt4_lon,pt4_lat = MOOSxy2LonLat(X+add_cos, Y-add_sin)
             
             # Build a ring of the points for the search area polygon
-            ring_filter.AddPoint(pt1x,pt1y)
-            ring_filter.AddPoint(pt2x,pt2y)
-            ring_filter.AddPoint(pt3x,pt3y)
-            ring_filter.AddPoint(pt4x,pt4y)
+            ring_filter.AddPoint(pt1_lon, pt1_lat)
+            ring_filter.AddPoint(pt2_lon, pt2_lat)
+            ring_filter.AddPoint(pt3_lon, pt3_lat)
+            ring_filter.AddPoint(pt4_lon, pt4_lat)
             ring_filter.CloseRings()
             poly_filter.AddGeometry(ring_filter) # Add the ring to the previously created polygon         
             
             # Show the Search Radius Polygon on pMarnineViewer
-            s_poly_vert = 'pts={'+str(x_norm+add_sin)+','+ str(y_norm+add_cos)+':'+ str(x_norm-add_cos)+','+str(y_norm+add_sin)+':'+ str(x_norm-add_sin)+','+str(y_norm-add_cos)+':' +str(x_norm+add_cos)+','+str(y_norm-add_sin)+'},'
+            s_poly_vert = 'pts={'+str(X+add_sin)+','+ str(Y+add_cos)+':'+ str(X-add_cos)+','+str(Y+add_sin)+':'+ str(X-add_sin)+','+str(Y-add_cos)+':' +str(X+add_cos)+','+str(Y-add_sin)+'},'
             comms.notify('VIEW_POLYGON', s_poly_vert+'label=Search,edge_size=10,vertex_size=1,edge_color=red',)
             
             # Filter out data to determine the search area and print out the 
@@ -360,9 +369,8 @@ def main():
             while feature:
                 time.sleep(.001)
                 geom_point = feature.GetGeometryRef()
-                x,y = LatLon2UTM(geom_point.GetX(), geom_point.GetY())
-                new_x = x-x_origin
-                new_y = y-y_origin
+                new_x, new_y = LonLat2MOOSxy(geom_point.GetX(), geom_point.GetY())
+                
                 pos = 'x='+str(new_x)+',y='+str(new_y)
                 poly_search = 'format=radial,'+pos+',radius=25,pts=8,edge_size=5,vertex_size=2,edge_color=aquamarine,vertex_color=aquamarine,label='+str(counter)
                 comms.notify('VIEW_POLYGON', poly_search)
@@ -381,7 +389,7 @@ def main():
                 counter += 1
             # Output to the MOOSDB a list of obstacles
             #   ASV_X,ASV_Y : # of Obstacles : x,y,t_lvl,type : x,y,t_lvl,type : ...
-            obstacles = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(num_obs)+':'+obs_pos
+            obstacles = str(X)+','+str(Y)+','+str(heading)+':'+str(num_obs)+':'+obs_pos
             comms.notify('Obstacles', obstacles)            
             # Determine if a new polygon was used
             if max_cntr < counter:
@@ -425,7 +433,7 @@ def main():
                     if point.Within(geom_poly):
                         poly_str = "No points"
                     else:
-                        poly_str = polygon(x_norm, y_norm, heading, feature_poly, intersection_poly, True,counter_poly)
+                        poly_str = polygon(X, Y, heading, feature_poly, intersection_poly, True,counter_poly)
                     
                 # Case 2: there are no points in the the search window, 
                 #   therefore we are temperarily giving the entire polygon to 
@@ -434,7 +442,7 @@ def main():
 #                    if point.Within(geom_poly):
 #                        poly_str = "No points"
 #                    else:
-                    poly_str = polygon(x_norm, y_norm, heading, feature_poly, False, False, counter_poly)
+                    poly_str = polygon(X, Y, heading, feature_poly, False, False, counter_poly)
    
                 # If it is not the first polygon, then add a '!' to the end of 
                 #   the  string.
@@ -453,7 +461,7 @@ def main():
 
             # Post an update if there are polygon obstacles
             if (layer_poly.GetFeatureCount()>0):
-                poly_obs = str(x_norm)+','+str(y_norm)+','+str(heading)+':'+str(counter_poly-1)+':'+poly_info
+                poly_obs = str(X)+','+str(Y)+','+str(heading)+':'+str(counter_poly-1)+':'+poly_info
                 comms.notify('Poly_Obs', poly_obs)  
                 
             # Determine if a new polygon was used
