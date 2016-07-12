@@ -52,9 +52,9 @@ def LonLat2MOOSxy(lat, lon):
 ## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
 #==============================================================================
 def on_connect():
-    comms.register('NAV_X', 0.2)
-    comms.register('NAV_Y', 0.2)
-    comms.register('NAV_HEADING', 0.2)
+    comms.register('NAV_X', 0)
+    comms.register('NAV_Y', 0)
+    comms.register('NAV_HEADING', 0)
     return True
     
 #==============================================================================
@@ -134,9 +134,10 @@ def poly_intersect(search_poly, poly):
 #==============================================================================
 def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     if (TF_intersect):
-        geom = intersect
+        geom = intersect.Buffer(0.00003)
     else:
         geom = feature.GetGeometryRef()
+        geom = geom.Buffer(0.00003)
     
     # Initialize variables
     x1 = 0
@@ -149,7 +150,7 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     min_angle = 360
     max_angle = -360
     min_dist = 9999 
-    min_dist_angle = 999
+#    min_dist_angle = 999
     
     d_min = 0
     d_max = 0
@@ -192,14 +193,14 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
         # Determine if the angle is the minimum angle
         if angle < min_angle:
             min_angle = angle
-            d_min = d
+            d_min_ang = d
             x1 = ptx
             y1 = pty
         
         # Determine if the angle is the maximum angle
         if angle > max_angle:
             max_angle = angle
-            d_max = d
+            d_max_ang = d
             x2 = ptx
             y2 = pty
         
@@ -208,9 +209,9 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
         if min_dist > d:
             min_dist = d
 #            print "distance: %f" %d
-            min_dist_angle = angle
-            x_small = ptx
-            y_small = pty
+#            min_dist_angle = angle
+            x_small = ptx+.01
+            y_small = pty+.01
         
     # Post these points to pMarineViewer
     pt1 = 'x='+str(x1)+',y='+str(y1)+',vertex_size=6.5,vertex_color=white,active=true,label=pt1_'+str(cntr)
@@ -226,8 +227,8 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
     obs_type = feature.GetField(1)
     
     if num_points>0:
-    # t_lvl,type @ min_ang,max_ang,min_dist_ang @ min_ang_dist,max_ang_dist,min_dist
-        poly = str(t_lvl)+','+str(obs_type)+'@'+str(x1)+','+str(y1)+','+str(x_small)+','+str(y_small)+','+str(x2)+','+str(y2)+'@'+str(d_min)+','+str(d_max)+','+str(min_dist)
+    # t_lvl,type @ min_ang_x,min_ang_y,min_dist_x,min_dist_y,max_ang_x,max_ang_y @ min_ang_dist,max_ang_dist,min_dist
+        poly = str(t_lvl)+','+str(obs_type)+'@'+str(x1)+','+str(y1)+','+str(x_small)+','+str(y_small)+','+str(x2)+','+str(y2)+'@'+str(d_min_ang)+','+str(d_max_ang)+','+str(min_dist)
 #        +str(np.mod(ang4MOOS(max_angle), 360))+','+str(np.mod(ang4MOOS(min_angle), 360))+','+str(np.mod(ang4MOOS(min_dist_angle), 360))
     else:
         poly = "No points"    
@@ -241,13 +242,13 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
 #   MOOSDB as a string.
 #==============================================================================
 def main():
-    # Time Warp and Scaling factor constant
-    time_warp = 2
-    scaling_factor = 0.04*time_warp
-    
-    # Set the timewarp and scale factor
-    pymoos.set_moos_timewarp(time_warp)
-    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
+#    # Time Warp and Scaling factor constant
+#    time_warp = 1
+#    scaling_factor = 0.04*time_warp
+#    
+#    # Set the timewarp and scale factor
+#    pymoos.set_moos_timewarp(time_warp)
+#    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
     
     #easily mark all of the output and input files
     file_pnt = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_pnt2.shp'  
