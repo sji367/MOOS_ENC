@@ -46,7 +46,7 @@ BHV_OA_poly::BHV_OA_poly(IvPDomain gdomain) :
   m_domain = subDomain(m_domain, "course,speed");
 
   // Add any variables this behavior needs to subscribe for
-  addInfoVars("WPT, Poly_Obs, NAV_SPEED, NAV_X, NAV_Y, NAV_HEAD");
+  addInfoVars("Next_WPT, Poly_Obs, NAV_SPEED, NAV_X, NAV_Y, NAV_HEAD");
 }
 
 //---------------------------------------------------------------
@@ -60,8 +60,8 @@ bool BHV_OA_poly::setParam(string param, string val)
   // Get the numerical value of the param argument for convenience once
   double double_val = atof(val.c_str());
   
-  if((param == "foo") && isNumber(val)) {
-    // Set local member variables here
+  if((param == "length")) {
+    postWMessage(val);
     return(true);
   }
   else if (param == "bar") {
@@ -139,10 +139,10 @@ IvPFunction* BHV_OA_poly::onRunState()
   // Part 1: Build the IvP function
   IvPFunction *ipf = 0;
   
-  // Part 1a: Get information from the InfoBuffer
+  // Part 2a: Get information from the InfoBuffer
   bool ok1, ok2, ok3;
   m_obstacles = getBufferStringVal("Poly_Obs", ok1);
-  m_WPT = getBufferStringVal("WPT", ok2);
+  m_WPT = getBufferStringVal("Next_WPT", ok2);
   m_speed = getBufferDoubleVal("NAV_SPEED", ok3);
   stringstream ss;
   // Check if there are new obstacles and speed and if there are, make a new IvPfunction
@@ -157,7 +157,7 @@ IvPFunction* BHV_OA_poly::onRunState()
     }
   else
     {
-      // Part 1b: Parse the obstacle information collected in the previous step
+      // Part 2b: Parse the obstacle information collected in the previous step
       // Parse the Waypoint Information
       if (ok2 and m_WPT!="first_point")
 	{
@@ -211,7 +211,6 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 {
   IvPFunction *ivp_function = 0;
   double max_cost;
-  vector<double> cost;
   stringstream ss,ss1,ss2, ss3;
 
   int maxutil = 100; // Need to look at the Waypoint behavior to see what their maximum utility is
@@ -260,11 +259,33 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       // Information on the angles
       //    minimum angle, maximum angle, angle of minimum distance
       vector<string> poly_ang_info = parseString(poly_info[1], ',');
+      double pnt1, pnt2;
+      
+      // min_angle
+      pnt1 = (strtod(poly_ang_info[4].c_str(), NULL));
+      pnt2 = (strtod(poly_ang_info[5].c_str(), NULL));
+      obstacle.min_ang.ang = (relAng(m_ASV_x, m_ASV_y, pnt1, pnt2));
+      // Max angle
+      pnt1 = (strtod(poly_ang_info[0].c_str(), NULL));
+      pnt2 = (strtod(poly_ang_info[1].c_str(), NULL));
+      obstacle.max_ang.ang = (relAng(m_ASV_x, m_ASV_y, pnt1, pnt2));
+      // Max Cost
+      pnt1 = (strtod(poly_ang_info[2].c_str(), NULL));
+      pnt2 = (strtod(poly_ang_info[3].c_str(), NULL));
+      obstacle.min_dist.ang = (relAng(m_ASV_x, m_ASV_y, pnt1, pnt2));
+      
+      ss.str(std::string());
+      ss1.str(std::string());
+      ss2.str(std::string());
+      ss3.str(std::string());
+      
+      ss << m_num_obs;
+      ss1 << obstacle.min_ang.ang;
+      ss2 << obstacle.max_ang.ang;
+      ss3 << obstacle.min_dist.ang;
 
-      postMessage("Angle", poly_info[1]);
-      obstacle.min_ang.ang = (strtod(poly_ang_info[0].c_str(), NULL));
-      obstacle.max_ang.ang = (strtod(poly_ang_info[1].c_str(), NULL));
-      obstacle.min_dist.ang = (strtod(poly_ang_info[2].c_str(), NULL));
+      postMessage("Angle", ss.str() +" Obstacles - min: " + ss1.str()+", max: "+ss2.str()+", max_cost: "+ss3.str());
+
       
       // Information on the distance
       //    minimum angle distance, maximum angle distance, minimum distance
@@ -287,67 +308,116 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       obstacle.min_dist.cost = calc_cost(obstacle.t_lvl,obstacle.min_dist.dist,multiplier);
 
       // Calculate the slope and y intercepts
-      obstacle.min_ang.m = (obstacle.min_ang.cost-obstacle.min_dist.cost)/(obstacle.min_ang.ang-obstacle.min_dist.ang);
-      obstacle.max_ang.m = (obstacle.min_dist.cost-obstacle.max_ang.cost)/(obstacle.min_dist.ang-obstacle.max_ang.ang);
+      // Deal with slope being inf --> set it = to large number
+      if (obstacle.min_ang.ang == obstacle.min_dist.ang)
+	{
+	  obstacle.min_ang.m = 9999;
+	}
+      else
+	obstacle.min_ang.m = (obstacle.min_ang.cost-obstacle.min_dist.cost)/(obstacle.min_ang.ang-obstacle.min_dist.ang);
+
+      if (obstacle.max_ang.ang == obstacle.min_dist.ang)
+	{
+	  obstacle.max_ang.m = 9999;
+	}
+      else
+	obstacle.max_ang.m = (obstacle.min_dist.cost-obstacle.max_ang.cost)/(obstacle.min_dist.ang-obstacle.max_ang.ang);
+
       obstacle.min_ang.b = obstacle.min_ang.cost - obstacle.min_ang.m*obstacle.min_ang.ang;
       obstacle.max_ang.b = obstacle.max_ang.cost - obstacle.max_ang.m*obstacle.max_ang.ang;
       
-      double utility;
+      double utility, c, cost;
       int cur_ang;
+      string x,y;
 
-      // This function is to make sure that the ASV avoids the obstacle with some buffer
+      //postMessage("line_min", "y = "+doubleToString(obstacle.min_ang.m)+" x + "+doubleToString(obstacle.min_ang.m));
+
+      // The buffer distance is to make sure that the ASV avoids the obstacle with some buffer
       int buffer_width = 20;
+      // Make a larger buffer if the maximum cost (aka the minimum distance) is greater than 1 
+      if (obstacle.min_dist.cost > 1)
+	{
+	  buffer_width += floor(pow(2*obstacle.min_dist.cost,2));
+	  postMessage("buffer_w", buffer_width);
+	}
 
       // This calculates the utility and stores that value if it is less than the current utility for all obstacles --> min angle to max cost
       
       for (double x1 = obstacle.min_ang.ang-buffer_width; x1<=obstacle.min_dist.ang; x1++)
 	{
-	  if (x1<0)
-	    cur_ang = (int)floor(x1+360);
+	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
+	  if (obstacle.min_ang.m == 9999)
+	    cost = obstacle.min_dist.cost;
 	  else
-	    cur_ang = (int)floor(x1);
+	    cost = (obstacle.min_ang.m*x1+obstacle.min_ang.b);
+	  if (cost > 1)
+	    {
+	      x = doubleToString(m_ASV_x);
+	      y = doubleToString(m_ASV_y);
+	      postMessage("Cost", "x="+x+", y="+y+", Cost:"+doubleToString(cost));
+	      c = 1;
+	      //maxutil = pow(cost, .4)*maxutil;
+	    }
+	  else
+	    {
+	      c = pow(cost, 4);
+	      maxutil = 100;
+	    }
+	  utility = maxutil*(1-c);	  
 
-	  utility = (maxutil*(1-(obstacle.min_ang.m*x1+obstacle.min_ang.b)*obstacle.min_ang.cost));
+	  // Update the current angle
+	  cur_ang = (int)floor((int)x1%360);
+	  if (cur_ang<0)
+	    cur_ang+=360;
 
 	  // If the current utility value is less than the one for the gaussian window then store the one for the Gaussian window
 	  if (utility<OA_util[cur_ang])
-	    OA_util[cur_ang]=utility;
+	    OA_util[cur_ang]=floor(utility);
 	}
+      
+      // Reset max_util
+      maxutil = 100;
 
       // This calculates the utility and stores that value if it is less than the current utility for all obstacles --> max cost to max angle
       for (double x2 = obstacle.min_dist.ang; x2<=obstacle.max_ang.ang+buffer_width; x2++)
 	{
-	  if (x2>360)
-	    cur_ang = (int)floor(x2-360);
+	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
+	  if (obstacle.max_ang.m == 9999)
+	    cost = obstacle.min_dist.cost;
 	  else
-	    cur_ang = (int)floor(x2);
+	    cost = (obstacle.max_ang.m*x2+obstacle.max_ang.b);
+	  if (cost > 1)
+	    {
+	      c = 1;
+	      //maxutil = pow(cost, .5)*maxutil;
+	    }
+	  else
+	    {
+	      c = pow(cost, 3);
+	      maxutil = 100;
+	    }
 
-	  utility = (maxutil*(1-(obstacle.max_ang.m*x2+obstacle.max_ang.b)*obstacle.max_ang.cost));
+	  // Update the current angle
+	  cur_ang = (int)floor((int)x2%360);
 	  
-	  // If the current utility value is less than the one for the gaussian window then store the one for the Gaussian window
+	  // Make sure it is not negative
+	  if (cur_ang < 0)
+	    cur_ang += 360;
+
+	  // If the current utility value is less than the previously stored value, store the new one
 	  if (utility<OA_util[cur_ang])
-	    OA_util[cur_ang]=utility;
+	    OA_util[cur_ang]=floor(utility);
 	}
 
       // Push the information on the indivual obstacle to a vector of type poly_obs
       all_poly_obs.push_back(obstacle);
-
-      // Push the maximum cost for that obstacle to a vector so that we can easily detemine the maximum cost for the search area in a later step
-      cost.push_back(obstacle.min_dist.cost);
     }
 
-  string str = "";
   // Set the values for the angle (domain) and utility (range)
-  int iii;//=0;
-  //domain_vals.push_back(iii); range_vals.push_back((int)floor(OA_util[iii]));
-  for (iii = 0; iii<360; iii++)
+  for (int iii = 0; iii<360; iii++)
     {
-      //if (OA_util[iii] != OA_util[iii-1])
-      //{
-      
       domain_vals.push_back(iii);
       range_vals.push_back((int)floor(OA_util[iii]));
-	  //}
     }
 
   head_zaic_v.setDomainVals(domain_vals);
@@ -366,17 +436,11 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 
 double BHV_OA_poly::calc_cost(int t_lvl, double dist, double multiplier)
 {
-  double cost, c;
+  double cost;
   stringstream ss;
 
   // Calculate original cost
   cost= t_lvl/dist*multiplier;
-  
-  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
-  if (cost > 1) 
-    c = 1;
-  else 
-    c = cost;//pow(cost, 3);
 
-  return c;
+  return cost;
 }
