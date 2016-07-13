@@ -366,12 +366,9 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	  utility = maxutil*(1-c);	  
 
 	  // Update the current angle
-	  if (x1<0)
-	    cur_ang = (int)floor(x1+360);
-	  else if (x1>360)
-	    cur_ang = (int)floor(x1-360);
-	  else
-	    cur_ang = (int)floor(x1);
+	  cur_ang = (int)floor((int)x1%360);
+	  if (cur_ang<0)
+	    cur_ang+=360;
 
 	  // If the current utility value is less than the one for the gaussian window then store the one for the Gaussian window
 	  if (utility<OA_util[cur_ang])
@@ -401,12 +398,11 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	    }
 
 	  // Update the current angle
-	  if (x2<0)
-	    cur_ang = (int)floor(x2+360);
-	  if (x2>360)
-	    cur_ang = (int)floor(x2-360);
-	  else
-	    cur_ang = (int)floor(x2);
+	  cur_ang = (int)floor((int)x2%360);
+	  
+	  // Make sure it is not negative
+	  if (cur_ang < 0)
+	    cur_ang += 360;
 
 	  // If the current utility value is less than the previously stored value, store the new one
 	  if (utility<OA_util[cur_ang])
