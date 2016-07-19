@@ -225,13 +225,13 @@ def latlongBuffer(x, y, des_buffer, UTM):
 #   MOOSDB as a string.
 #==============================================================================
 def main(): 
-    # Time Warp and Scaling factor constant
-    time_warp = 2
-    scaling_factor = 0.04*time_warp    
-    
-    # Set the timewarp and scale factor
-    pymoos.set_moos_timewarp(time_warp)
-    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
+#    # Time Warp and Scaling factor constant
+#    time_warp = 1
+#    scaling_factor = 0.04*time_warp    
+#    
+#    # Set the timewarp and scale factor
+#    pymoos.set_moos_timewarp(time_warp)
+#    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
     
     file_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'  
     
@@ -416,7 +416,7 @@ def main():
                     
                     print str(cur_x_int) +', '+str(cur_y_int)
                     if isinstance(cur_x_int, float):
-                        comms.notify('VIEW_POINT','x='+str(cur_x_int) +','+'y='+str(cur_y_int)+',vertex_size=6.5,vertex_color=pink,active=true,label=int')
+                        comms.notify('VIEW_POINT','x='+str(cur_x_int) +','+'y='+str(cur_y_int)+',vertex_size=6.5,vertex_color=invisible,active=true,label=int')
                     x_int.append(cur_x_int)
                     y_int.append(cur_y_int)
                     
@@ -462,6 +462,7 @@ def main():
                     if dist <= buffer_dist:
                         # Increment to the next waypoint 
                         comms.notify('WPT_UPDATE', 'currix='+str(int(wpt_index)+1))
+                        comms.notify('VIEW_POINT','x=1,y=1,active=false,label=int')
                         print 'Skiped WPT %i, going to %i' % (wpt_index, wpt_index+1)
                         check_within = False
                         prev_WPT_x = ASV_x

@@ -56,6 +56,62 @@ def LayerMultiPoint (ds, LayerName_mp, out_layer):
     
     return layer_pnt
 
+# Gives you the index for each field for a given layer
+def fields(ds,LayerName):
+    layer = ds.GetLayerByName(LayerName)
+    layer_def = layer.GetLayerDefn()
+#    feat = layer.GetNextFeature()
+    print str(LayerName)
+    for i in range(layer_def.GetFieldCount()):
+        print str(i) + ': ' + layer_def.GetFieldDefn(i).GetName()
+
+# Converts the number stored in category of Landmark to a string
+def category_landmark(index):
+    if index == '1':
+        return 'Cairn'
+    elif index =='2':
+        return 'Cemetery'
+    elif index =='3':
+        return 'Chimney'
+    elif index =='4':
+        return 'Dish_aerial'
+    elif index =='5':
+        return 'Flagstaff'
+    elif index =='6':
+        return 'Flare_stack'
+    elif index == '7':
+        return 'Mast'
+    elif index == '8':
+        return 'Windsock'
+    elif index =='9':
+        return 'Monument'
+    if index == '10':
+        return 'Column'
+    if index == '11':
+        return 'Memorial_plaque'
+    if index == '12':
+        return 'Obelisk'
+    if index == '13':
+        return 'Statue'
+    if index == '14':
+        return 'Cross'
+    if index == '15':
+        return 'Dome'
+    if index == '16':
+        return 'Radar_scanner'
+    if index == '17':
+        return 'Tower'
+    if index == '18':
+        return 'Windmill'
+    if index == '19':
+        return 'Windmotor'
+    elif index =='20':
+        return 'Spire'
+    elif index =='21':
+        return 'Large_rock'
+    else:
+        return 'Unknown'
+
 # Converts the ENC File to 3 different shape files    
 def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
     layer = ds.GetLayerByName(LayerName)
@@ -87,15 +143,16 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
     
         ## Update Threat Level
         # If WL has been updated use the function calc_t_lvl to calculate threat level
-        if WL != 0:
+        if WL != 0 or LayerName == 'DEPCNT':
             t_lvl = calc_t_lvl(depth, WL)
         # If it is Land set threat level to 5
         elif LayerName == 'LNDARE' or LayerName == 'DYKCON' or LayerName == 'PONTON' or LayerName == 'COALNE':
             t_lvl = 5
-        # If it is a Buoy, Light or Beacon set threat level to 4
+        # If it is a Buoy, Light or Beacon set threat level to 3
         elif LayerName == 'LIGHTS' or LayerName == 'BOYISD' or LayerName == 'BOYSPP' or LayerName == 'BOYSAW' or LayerName == 'BOYLAT' or LayerName == 'BCNSPP' or LayerName == 'BCNLAT':
             t_lvl = 3
-#        print t_lvl
+        elif LayerName == 'LNDMRK':
+            t_lvl = -1
         out_layer = None
         # Choose the correct layer for 
         if geo_name == 'POINT':
@@ -113,6 +170,12 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
         new_feat = ogr.Feature(defn_pnt)
         new_feat.SetField('T_lvl', t_lvl)
         new_feat.SetField('Type', LayerName)
+        if LayerName == 'LNDMRK':
+            c = category_landmark(feat.GetField(11))
+            if c is not None and feat.GetField(16) is not None:
+                print 'Cat: ' + category_landmark(feat.GetField(11)) + ', Vis: '+ str(2-feat.GetField(16))
+            new_feat.SetField('Cat', category_landmark(feat.GetField(11))) # Category - store as string and not a #
+            new_feat.SetField('Visual', 2-feat.GetField(16)) # Visually Conspicuous (Y - store as 1, N - store as 0)
     
         # Make a geometry from wkt object
         obj = ogr.CreateGeometryFromWkt(wkt)
@@ -136,6 +199,7 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
 
     return output_pnt, output_line, output_poly
     
+
 ##---------------------------------------------------------------------------##
 ### Points
 ## Underwater Rocks   
@@ -177,6 +241,8 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
 #fields(ds, 'DEPCNT') # 11 - Depth of the contour
 ## Dyke
 #fields(ds, 'DYKCON') # 19 - Vertical Length
+## Landmark
+#fields(ds, 'LNDMRK') # 11 - Category, 12 - Color, 13 - Color Patern, 16 - Conspicuous
 
 ##---------------------------------------------------------------------------##
 # Path to the ENC and output shapefiles
@@ -207,6 +273,8 @@ layer_pnt = ds_pnt.CreateLayer('ENC', None, ogr.wkbPoint)
 # Add the Threat Level and Type Attributes
 layer_pnt.CreateField(ogr.FieldDefn('T_lvl', ogr.OFTInteger))
 layer_pnt.CreateField(ogr.FieldDefn('Type', ogr.OFTString))
+layer_pnt.CreateField(ogr.FieldDefn('Cat', ogr.OFTString))
+layer_pnt.CreateField(ogr.FieldDefn('Visual', ogr.OFTInteger))
 defn_pnt = layer_pnt.GetLayerDefn()
 
 ##---------------------------------------------------------------------------##
@@ -222,6 +290,8 @@ layer_poly = ds_poly.CreateLayer('ENC', None, ogr.wkbPolygon)
 # Add the Threat Level and Type Attributes
 layer_poly.CreateField(ogr.FieldDefn('T_lvl', ogr.OFTInteger))
 layer_poly.CreateField(ogr.FieldDefn('Type', ogr.OFTString))
+layer_poly.CreateField(ogr.FieldDefn('Cat', ogr.OFTString))
+layer_poly.CreateField(ogr.FieldDefn('Visual', ogr.OFTInteger))
 defn_poly = layer_poly.GetLayerDefn()
 
 ##---------------------------------------------------------------------------##
@@ -237,6 +307,8 @@ layer_line = ds_line.CreateLayer('ENC', None, ogr.wkbLineString)
 # Add the Threat Level and Type Attributes
 layer_line.CreateField(ogr.FieldDefn('T_lvl', ogr.OFTInteger))
 layer_line.CreateField(ogr.FieldDefn('Type', ogr.OFTString))
+layer_line.CreateField(ogr.FieldDefn('Cat', ogr.OFTString))
+layer_line.CreateField(ogr.FieldDefn('Visual', ogr.OFTInteger))
 defn_line = layer_line.GetLayerDefn()
 
 ##---------------------------------------------------------------------------##
@@ -261,6 +333,7 @@ layer_pnt, layer_line, layer_poly = enc2shp(ds, 'LNDARE', layer_pnt, layer_line,
 layer_pnt, layer_line, layer_poly = enc2shp(ds, 'PONTON', layer_pnt, layer_line, layer_poly)
 layer_pnt, layer_line, layer_poly = enc2shp(ds, 'DEPCNT', layer_pnt, layer_line, layer_poly)
 layer_pnt, layer_line, layer_poly = enc2shp(ds, 'DYKCON', layer_pnt, layer_line, layer_poly)
+layer_pnt, layer_line, layer_poly = enc2shp(ds, 'LNDMRK', layer_pnt, layer_line, layer_poly)
 
 # Close and save the files
 ds = ds_pnt = ds_line = ds_poly = None

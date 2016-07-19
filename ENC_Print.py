@@ -102,13 +102,13 @@ def on_connect():
     return True
 
 def main():
-    # Time Warp and Scaling factor constant
-    time_warp = 2
-    scaling_factor = 0.04*time_warp    
-    
-    # Set the timewarp and scale factor
-    pymoos.set_moos_timewarp(time_warp)
-    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
+#    # Time Warp and Scaling factor constant
+#    time_warp = 1
+#    scaling_factor = 0.04*time_warp    
+#    
+#    # Set the timewarp and scale factor
+#    pymoos.set_moos_timewarp(time_warp)
+#    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
     
     comms.set_on_connect_callback(on_connect);
     comms.run('localhost',9000,'print')
@@ -116,11 +116,13 @@ def main():
     # Start by creating the baseline for the search area polygon 
     ring = ogr.Geometry(ogr.wkbLinearRing)
     poly_filter = ogr.Geometry(ogr.wkbPolygon)
-
-    N_lat = 43.07511878
-    E_long = -70.68395689
-    S_lat = 43.05780589
-    W_long = -70.72434189
+    
+    lon1, lat1 = MOOSxy2LonLat(5800,-7935)
+    lon2, lat2 = MOOSxy2LonLat(9100,-10525)
+    N_lat = lat1#43.998441#07511878
+    E_long = lon1#-70.588728#68395689
+    S_lat = lat2#43.968954#05780589
+    W_long = lon2#-70.634514#72434189
     
     # Build a ring of the points fot the search area polygon
     ring.AddPoint(W_long, N_lat)
@@ -172,16 +174,18 @@ def main():
             color = 'vertex_color=red,'
         elif t_lvl == 3:
             #size = 'vertex_size=9,'
-            color = 'vertex_color=orange,'
+            color = 'vertex_color=darkorange,'
         elif t_lvl == 2:
             #size = 'vertex_size=7,'
-            color = 'vertex_color=yellow,'
+            color = 'vertex_color=gold,'
         elif t_lvl == 1:
             #size = 'vertex_size=5,'
-            color = 'vertex_color=blue,'
+            color = 'vertex_color=greenyellow,'
         elif t_lvl == 0:
             #size = 'vertex_size=3,'
             color = 'vertex_color=green,'
+        elif t_lvl == -1: # Landmark
+            color = 'vertex_color=violet'
         size =  'vertex_size=10,'   
         m = location+size+color#+label+' ' + str(cnt)
         cnt = 1+cnt
@@ -201,7 +205,7 @@ def main():
     
     # Filter the layer to only include features within the area in 
     #   pMarnineViewer
-    layer.SetSpatialFilter(poly_filter)
+#    layer.SetSpatialFilter(poly_filter)
 #    print 'Num of Features in Filter: %d' %layer.GetFeatureCount()
     feature = layer.GetFeature(0)
     while feature:
@@ -209,7 +213,7 @@ def main():
         geom = feature.GetGeometryRef() # Polygon from shapefile
         # Get the interesection of the polygon from the shapefile and the
         #   outline of tiff from pMarnineViewer
-        intersection_poly = geom.Intersection(poly_filter) 
+        intersection_poly = geom#.Intersection(poly_filter) 
         
         # Get the ring of that intersection polygon
         p_ring = intersection_poly.GetGeometryRef(0) 
@@ -234,11 +238,11 @@ def main():
             if t_lvl == 4:
                 color = 'edge_color=red,vertex_color=red'
             elif t_lvl == 3:
-                color = 'edge_color=orange,vertex_color=orange'
+                color = 'edge_color=orange,vertex_color=darkorange'
             elif t_lvl == 2:
                 color = 'edge_color=yellow,vertex_color=yellow'
             elif t_lvl == 1:
-                color = 'edge_color=blue,vertex_color=brown'
+                color = 'edge_color=blue,vertex_color=yellowgreen'
             elif t_lvl == 0:
                 color = 'edge_color=green,vertex_color=green'
                 
@@ -286,15 +290,15 @@ def main():
         if t_lvl == 4:
             color = 'edge_color=red,vertex_color=red'
         elif t_lvl == 3:
-            color = 'edge_color=orange,vertex_color=orange'
+            color = 'edge_color=orange,vertex_color=darkorange'
         elif t_lvl == 2:
             color = 'edge_color=yellow,vertex_color=yellow'
         elif t_lvl == 1:
-            color = 'edge_color=blue,vertex_color=brown'
+            color = 'edge_color=blue,vertex_color=yellowgreen'
         elif t_lvl == 0:
             color = 'edge_color=green,vertex_color=green'
-        if points != 0:
-            comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color)
+#        if points != 0:
+#            comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color)
 #            print pymoos.time()-t
         feature = layer.GetNextFeature()
         
