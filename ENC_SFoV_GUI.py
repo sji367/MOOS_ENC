@@ -21,24 +21,45 @@ def Draw():
     global text_r5_c0, text_r5_c1, text_r5_c2, text_r5_c3
     
     # Nav_Aids Globals for Grid
-    global text_r6_c0, text_r6_c1, text_r6_c2, text_r6_c3
     global text_r7_c0, text_r7_c1, text_r7_c2, text_r7_c3
     global text_r8_c0, text_r8_c1, text_r8_c2, text_r8_c3
     global text_r9_c0, text_r9_c1, text_r9_c2, text_r9_c3
     global text_r10_c0, text_r10_c1, text_r10_c2, text_r10_c3
+    global text_r11_c0, text_r11_c1, text_r11_c2, text_r11_c3
     
     # Underwater Globals for Grid
-    global text_r11_c0, text_r11_c1, text_r11_c2, text_r11_c3
-    global text_r12_c0, text_r12_c1, text_r12_c2, text_r12_c3
     global text_r13_c0, text_r13_c1, text_r13_c2, text_r13_c3
     global text_r14_c0, text_r14_c1, text_r14_c2, text_r14_c3
     global text_r15_c0, text_r15_c1, text_r15_c2, text_r15_c3
+    global text_r16_c0, text_r16_c1, text_r16_c2, text_r16_c3
+    global text_r17_c0, text_r17_c1, text_r17_c2, text_r17_c3
     
     # Define and put Labels in correct place - Titles
     text_r0_c0 = tk.Label(text="  Obstacle Type  ", font = "Helvetica 12 bold").grid(row=0,column=0)
     text_r0_c1 = tk.Label(text='  Latitude  ', font = "Helvetica 12 bold").grid(row=0,column=1)
     text_r0_c2 = tk.Label(text='  Longitude  ', font = "Helvetica 12 bold").grid(row=0,column=2)
     text_r0_c3 = tk.Label(text='  Distance (m)  ', font = "Helvetica 12 bold").grid(row=0,column=3)
+    
+    # Add a space between the two sections
+    text_space1_c0 = tk.Label(text='')
+    text_space1_c1 = tk.Label(text='')
+    text_space1_c2 = tk.Label(text='')
+    text_space1_c3 = tk.Label(text='')
+    
+    text_space2_c0 = tk.Label(text='')
+    text_space2_c1 = tk.Label(text='')
+    text_space2_c2 = tk.Label(text='')
+    text_space2_c3 = tk.Label(text='')
+    
+    text_space1_c0.grid(row=6,column=0)
+    text_space1_c1.grid(row=6,column=1)
+    text_space1_c2.grid(row=6,column=2)
+    text_space1_c3.grid(row=6,column=3)
+    
+    text_space2_c0.grid(row=12,column=0)
+    text_space2_c1.grid(row=12,column=1)
+    text_space2_c2.grid(row=12,column=2)
+    text_space2_c3.grid(row=12,column=3)
     
     ##-----------------------------Landmarks--------------------------------## 
     text_r1_c0 = tk.Label(text='')
@@ -66,6 +87,11 @@ def Draw():
     text_r5_c2 = tk.Label(text='')
     text_r5_c3 = tk.Label(text='')
     
+    text_space1_c0.grid(row=6,column=0)
+    text_space1_c1.grid(row=6,column=1)
+    text_space1_c2.grid(row=6,column=2)
+    text_space1_c3.grid(row=6,column=3)
+    
     text_r1_c0.grid(row=1,column=0)
     text_r1_c1.grid(row=1,column=1)
     text_r1_c2.grid(row=1,column=2)
@@ -91,12 +117,7 @@ def Draw():
     text_r5_c2.grid(row=5,column=2)
     text_r5_c3.grid(row=5,column=3)
     
-    ##---------------------------Navigational Aids---------------------------## 
-    text_r6_c0 = tk.Label(text='')
-    text_r6_c1 = tk.Label(text='')
-    text_r6_c2 = tk.Label(text='')
-    text_r6_c3 = tk.Label(text='')
-    
+    ##---------------------------Navigational Aids---------------------------##     
     text_r7_c0 = tk.Label(text='')
     text_r7_c1 = tk.Label(text='')
     text_r7_c2 = tk.Label(text='')
@@ -116,11 +137,11 @@ def Draw():
     text_r10_c1 = tk.Label(text='')
     text_r10_c2 = tk.Label(text='')
     text_r10_c3 = tk.Label(text='')
-       
-    text_r6_c0.grid(row=6,column=0)
-    text_r6_c1.grid(row=6,column=1)
-    text_r6_c2.grid(row=6,column=2)
-    text_r6_c3.grid(row=6,column=3)
+    
+    text_r11_c0 = tk.Label(text='')
+    text_r11_c1 = tk.Label(text='')
+    text_r11_c2 = tk.Label(text='')
+    text_r11_c3 = tk.Label(text='')
     
     text_r7_c0.grid(row=7,column=0)
     text_r7_c1.grid(row=7,column=1)
@@ -142,17 +163,12 @@ def Draw():
     text_r10_c2.grid(row=10,column=2)
     text_r10_c3.grid(row=10,column=3)
     
+    text_r11_c0.grid(row=11,column=0)
+    text_r11_c1.grid(row=11,column=1)
+    text_r11_c2.grid(row=11,column=2)
+    text_r11_c3.grid(row=11,column=3)
+    
     ##---------------------------Underwater Objects--------------------------##
-    text_r11_c0 = tk.Label(text='')
-    text_r11_c1 = tk.Label(text='')
-    text_r11_c2 = tk.Label(text='')
-    text_r11_c3 = tk.Label(text='')
-    
-    text_r12_c0 = tk.Label(text='')
-    text_r12_c1 = tk.Label(text='')
-    text_r12_c2 = tk.Label(text='')
-    text_r12_c3 = tk.Label(text='')
-    
     text_r13_c0 = tk.Label(text='')
     text_r13_c1 = tk.Label(text='')
     text_r13_c2 = tk.Label(text='')
@@ -168,15 +184,15 @@ def Draw():
     text_r15_c2 = tk.Label(text='')
     text_r15_c3 = tk.Label(text='')
     
-    text_r11_c0.grid(row=11,column=0)
-    text_r11_c1.grid(row=11,column=1)
-    text_r11_c2.grid(row=11,column=2)
-    text_r11_c3.grid(row=11,column=3)
+    text_r16_c0 = tk.Label(text='')
+    text_r16_c1 = tk.Label(text='')
+    text_r16_c2 = tk.Label(text='')
+    text_r16_c3 = tk.Label(text='')
     
-    text_r12_c0.grid(row=12,column=0)
-    text_r12_c1.grid(row=12,column=1)
-    text_r12_c2.grid(row=12,column=2)
-    text_r12_c3.grid(row=12,column=3)
+    text_r17_c0 = tk.Label(text='')
+    text_r17_c1 = tk.Label(text='')
+    text_r17_c2 = tk.Label(text='')
+    text_r17_c3 = tk.Label(text='')
     
     text_r13_c0.grid(row=13,column=0)
     text_r13_c1.grid(row=13,column=1)
@@ -192,6 +208,16 @@ def Draw():
     text_r15_c1.grid(row=15,column=1)
     text_r15_c2.grid(row=15,column=2)
     text_r15_c3.grid(row=15,column=3)
+    
+    text_r16_c0.grid(row=16,column=0)
+    text_r16_c1.grid(row=16,column=1)
+    text_r16_c2.grid(row=16,column=2)
+    text_r16_c3.grid(row=16,column=3)
+    
+    text_r17_c0.grid(row=17,column=0)
+    text_r17_c1.grid(row=17,column=1)
+    text_r17_c2.grid(row=17,column=2)
+    text_r17_c3.grid(row=17,column=3)
     
 ##---------------------------------------------------------------------------##
 # This function updates the configuration labels for the Landmarks from the 
@@ -254,11 +280,11 @@ def config_Landmarks(landmark):
 ##---------------------------------------------------------------------------##   
 def config_Nav_Aids(nav_aids):
     # Nav_Aids Globals for Grid
-    global text_r6_c0, text_r6_c1, text_r6_c2, text_r6_c3
     global text_r7_c0, text_r7_c1, text_r7_c2, text_r7_c3
     global text_r8_c0, text_r8_c1, text_r8_c2, text_r8_c3
     global text_r9_c0, text_r9_c1, text_r9_c2, text_r9_c3
-    global text_r10_c0, text_r10_c1, text_r10_c2, text_r10_c3  
+    global text_r10_c0, text_r10_c1, text_r10_c2, text_r10_c3
+    global text_r11_c0, text_r11_c1, text_r11_c2, text_r11_c3
     
     # Parse Nav_Aids string for type, lat, long and distance
     NA = nav_aids.split('!')
@@ -278,30 +304,30 @@ def config_Nav_Aids(nav_aids):
             exec "DIST_%s=''" % (i+1)
     
     # Update the labels text
-    text_r6_c0.configure(text=TYPE_1)
-    text_r6_c1.configure(text=lat_1)
-    text_r6_c2.configure(text=lon_1)
-    text_r6_c3.configure(text=DIST_1)
+    text_r7_c0.configure(text=TYPE_1)
+    text_r7_c1.configure(text=lat_1)
+    text_r7_c2.configure(text=lon_1)
+    text_r7_c3.configure(text=DIST_1)
     
-    text_r7_c0.configure(text=TYPE_2)
-    text_r7_c1.configure(text=lat_2)
-    text_r7_c2.configure(text=lon_2)
-    text_r7_c3.configure(text=DIST_2)
+    text_r8_c0.configure(text=TYPE_2)
+    text_r8_c1.configure(text=lat_2)
+    text_r8_c2.configure(text=lon_2)
+    text_r8_c3.configure(text=DIST_2)
     
-    text_r8_c0.configure(text=TYPE_3)
-    text_r8_c1.configure(text=lat_3)
-    text_r8_c2.configure(text=lon_3)
-    text_r8_c3.configure(text=DIST_3)
+    text_r9_c0.configure(text=TYPE_3)
+    text_r9_c1.configure(text=lat_3)
+    text_r9_c2.configure(text=lon_3)
+    text_r9_c3.configure(text=DIST_3)
     
-    text_r9_c0.configure(text=TYPE_4)
-    text_r9_c1.configure(text=lat_4)
-    text_r9_c2.configure(text=lon_4)
-    text_r9_c3.configure(text=DIST_4)
+    text_r10_c0.configure(text=TYPE_4)
+    text_r10_c1.configure(text=lat_4)
+    text_r10_c2.configure(text=lon_4)
+    text_r10_c3.configure(text=DIST_4)
     
-    text_r10_c0.configure(text=TYPE_5)
-    text_r10_c1.configure(text=lat_5)
-    text_r10_c2.configure(text=lon_5)
-    text_r10_c3.configure(text=DIST_5)
+    text_r11_c0.configure(text=TYPE_5)
+    text_r11_c1.configure(text=lat_5)
+    text_r11_c2.configure(text=lon_5)
+    text_r11_c3.configure(text=DIST_5)
 
 ##---------------------------------------------------------------------------##
 # This function updates the configuration labels for the underwater obstacles
@@ -309,11 +335,13 @@ def config_Nav_Aids(nav_aids):
 ##---------------------------------------------------------------------------##   
 def config_Underwater(underwater):
     # Underwater Globals for Grid
-    global text_r11_c0, text_r11_c1, text_r11_c2, text_r11_c3
-    global text_r12_c0, text_r12_c1, text_r12_c2, text_r12_c3
+    
+    # Underwater Globals for Grid
     global text_r13_c0, text_r13_c1, text_r13_c2, text_r13_c3
     global text_r14_c0, text_r14_c1, text_r14_c2, text_r14_c3
     global text_r15_c0, text_r15_c1, text_r15_c2, text_r15_c3
+    global text_r16_c0, text_r16_c1, text_r16_c2, text_r16_c3
+    global text_r17_c0, text_r17_c1, text_r17_c2, text_r17_c3  
     
     # Parse Nav_Aids string for type, lat, long and distance
     UW = underwater.split('!')
@@ -333,30 +361,30 @@ def config_Underwater(underwater):
             exec "DIST_%s=''" % (i+1)
     
     # Update the labels text
-    text_r11_c0.configure(text=TYPE_1)
-    text_r11_c1.configure(text=lat_1)
-    text_r11_c2.configure(text=lon_1)
-    text_r11_c3.configure(text=DIST_1)
+    text_r13_c0.configure(text=TYPE_1)
+    text_r13_c1.configure(text=lat_1)
+    text_r13_c2.configure(text=lon_1)
+    text_r13_c3.configure(text=DIST_1)
     
-    text_r12_c0.configure(text=TYPE_2)
-    text_r12_c1.configure(text=lat_2)
-    text_r12_c2.configure(text=lon_2)
-    text_r12_c3.configure(text=DIST_2)
+    text_r14_c0.configure(text=TYPE_2)
+    text_r14_c1.configure(text=lat_2)
+    text_r14_c2.configure(text=lon_2)
+    text_r14_c3.configure(text=DIST_2)
     
-    text_r13_c0.configure(text=TYPE_3)
-    text_r13_c1.configure(text=lat_3)
-    text_r13_c2.configure(text=lon_3)
-    text_r13_c3.configure(text=DIST_3)
+    text_r15_c0.configure(text=TYPE_3)
+    text_r15_c1.configure(text=lat_3)
+    text_r15_c2.configure(text=lon_3)
+    text_r15_c3.configure(text=DIST_3)
     
-    text_r14_c0.configure(text=TYPE_4)
-    text_r14_c1.configure(text=lat_4)
-    text_r14_c2.configure(text=lon_4)
-    text_r14_c3.configure(text=DIST_4)
+    text_r16_c0.configure(text=TYPE_4)
+    text_r16_c1.configure(text=lat_4)
+    text_r16_c2.configure(text=lon_4)
+    text_r16_c3.configure(text=DIST_4)
     
-    text_r15_c0.configure(text=TYPE_5)
-    text_r15_c1.configure(text=lat_5)
-    text_r15_c2.configure(text=lon_5)
-    text_r15_c3.configure(text=DIST_5)
+    text_r17_c0.configure(text=TYPE_5)
+    text_r17_c1.configure(text=lat_5)
+    text_r17_c2.configure(text=lon_5)
+    text_r17_c3.configure(text=DIST_5)
     
 ##---------------------------------------------------------------------------##
 # This function updates the labels from the MOOS Variables
@@ -443,3 +471,5 @@ root.geometry("800x300+300+300")
 Draw()
 Refresher()
 root.mainloop()
+
+
