@@ -48,7 +48,7 @@ BHV_OA::BHV_OA(IvPDomain gdomain) :
   m_domain = subDomain(m_domain, "course,speed");
 
   // Add any variables this behavior needs to subscribe for
-  addInfoVars("WPT, Obstacles, NAV_SPEED, NAV_X, NAV_Y, NAV_HEAD");
+  addInfoVars("Next_WPT, Obstacles, NAV_SPEED, NAV_X, NAV_Y, NAV_HEAD");
 }
 
 //---------------------------------------------------------------
@@ -144,7 +144,7 @@ IvPFunction* BHV_OA::onRunState()
   // Part 1a: Get information from the InfoBuffer
   bool ok1, ok2, ok3;
   m_obstacles = getBufferStringVal("Obstacles", ok1);
-  m_WPT = getBufferStringVal("WPT", ok2);
+  m_WPT = getBufferStringVal("Next_WPT", ok2);
   m_speed = getBufferDoubleVal("NAV_SPEED", ok3);
   
   // Check if there are new obstacles and speed and if there are, make a new IvPfunction
@@ -263,7 +263,9 @@ IvPFunction *BHV_OA::buildFunctionWithZAIC()
   }
 
   // Need to set this so that it is a function of the size and the current speed of the vessel
-  multiplier = 4.5; 
+  double v_size = 4;
+  multiplier = v_size/m_speed*4.5; 
+
   ZAIC_PEAK head_zaic(m_domain, "course");
   
   poly = ",format=radial,radius=30,pts=3,edge_color=hotpink,label=obs";
@@ -403,7 +405,7 @@ IvPFunction *BHV_OA::buildZAIC_Vector()
   vector<double> domain_vals, range_vals;
   
   // Fill the array with maxiumum utility
-  int OA_util[360];
+  double OA_util[360];
   fill(OA_util,OA_util+360, maxutil);
 
   // Information on the obstacle
@@ -431,7 +433,7 @@ IvPFunction *BHV_OA::buildZAIC_Vector()
 	    }
 
 	  // This is the utility for the OA procedure for a particular angle in the gaussian window which describes how the cost falls off from directly towards the obstacle 
-	  int utility;
+	  double utility;
 
 	  // This calculates the utility of the Gaussian window function and stores that value if it is less than the current utility for all obstacles
 	  for (int k = 0; k< (2*width+1); k++)
@@ -444,7 +446,7 @@ IvPFunction *BHV_OA::buildZAIC_Vector()
 		cur_ang += -360;
 
 	      // M_E is e (2.7172...)
-	      utility = (int)floor(maxutil*(1-pow(M_E, -(pow((cur_ang - ang[ii]),2)/(2*(sigma * sigma))))*c));
+	      utility = (maxutil*(1-pow(M_E, -(pow((cur_ang - ang[ii]),2)/(2*(sigma * sigma))))*c));
 
 	      // If the current utility value is less than the one for the gaussian window then store the one for the Gaussian window
 	      if (utility<OA_util[cur_ang])
@@ -453,10 +455,17 @@ IvPFunction *BHV_OA::buildZAIC_Vector()
 	}
       
       // Set the values for the angle (domain) and utility (range)
-      for (int iii = 0; iii<359; iii++)
+      int iii=0;
+      domain_vals.push_back(iii); range_vals.push_back(OA_util[iii]);
+      for (iii = 1; iii<360; iii++)
 	{
-	  domain_vals.push_back(iii); range_vals.push_back(OA_util[iii]);
+	  if (OA_util[iii] != OA_util[iii-1])
+	    {
+	      domain_vals.push_back(iii);
+	      range_vals.push_back(OA_util[iii]);
+	    }
 	}
+
       head_zaic_v.setDomainVals(domain_vals);
       head_zaic_v.setRangeVals(range_vals);
 

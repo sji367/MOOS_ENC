@@ -11,6 +11,8 @@
 #include <string>
 #include "IvPBehavior.h"
 #include "AOF.h"
+//#include "../../../../MOOS/MOOSLIB/MOOSApp.h"
+//#include "../../../MOOS_V10.0.3_May1215/MOOSCore/Core/libMOOS/include/MOOS/Compatibility/Core/MOOSGenLib/ProcessConfigReader.h"
 
 class BHV_OA : public IvPBehavior {
 public:
@@ -37,8 +39,10 @@ protected: // Configuration parameters
 
 protected: // State variables
   string m_obstacles, m_obs_info, m_WPT;
+	double m_dLatOrigin, m_dLonOrigin;
   double m_ASV_x, m_ASV_y, m_ASV_head, m_speed;
   int m_num_obs, m_WPT_x, m_WPT_y;
+	//CProcessConfigReader m_MissionReader;
 };
 
 #define IVP_EXPORT_FUNCTION
