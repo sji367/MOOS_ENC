@@ -356,21 +356,21 @@ def category_wreck(feat):
 # Converts the number stored in Water Level Attribute to string     
 def water_level(index):
     if index == '1':
-        return 'Partly Submerged at High Water'
+        return 'is Partly Submerged at High Water'
     elif index =='2':
-        return 'Alyways Dry'
+        return 'is Alyways Dry'
     elif index =='3':
-        return 'Always Underwater/Submerged'
+        return 'is Always Underwater/Submerged'
     elif index =='4':
         return 'Covers and Uncovers'
     elif index =='5':
-        return 'Awash'
+        return 'is Awash'
     elif index =='6':
-        return 'Subject to Inundation or Floating'
+        return 'is Subject to Inundation or Floating'
     elif index == '7':
-        return 'Floating'
+        return 'is Floating'
     else:
-        return 'Unknown'
+        return 'is Unknown'
 
 # Converts the information from the ENC on naviagational aids to something 
 #   humans can understand
@@ -428,7 +428,7 @@ def category_underwater(feat, name):
         obj_type = 'Rock'
         z = feat.GetField(20)
         if z is None:
-            obj_type += ' that is '+water_level(str(feat.GetField(22)))
+            obj_type += ' that '+water_level(str(feat.GetField(22)))
 #            print water_level(feat.GetField(22))
         else:
             obj_type += ' @ '+str(z)+'m (MLLW)'
@@ -514,19 +514,16 @@ def build_filter(max_dist, in1, in2, ASV_head, sensor_FoV_ang, sensor_head, UTM_
 #   then outputs information on the obstacles to the MOOSDB as a string.
 #==============================================================================
 def main(): 
-    # Time Warp and Scaling factor constant
-    time_warp = 2
-    scaling_factor = 0.04*time_warp    
-    
-    # Set the timewarp and scale factor
-    pymoos.set_moos_timewarp(time_warp)
-    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
+#    # Time Warp and Scaling factor constant
+#    time_warp = 1
+#    scaling_factor = 0.04*time_warp    
+#    
+#    # Set the timewarp and scale factor
+#    pymoos.set_moos_timewarp(time_warp)
+#    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
     
     # Paths to all of the ENC files
     s57filename =  "/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/US5NH02M.000"
-#    outfile_pnt =  '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_pnt2.shp'
-#    outfile_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'
-#    outfile_line = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_line2.shp'
     
     # Open the S57 file
     ds = ogr.Open(s57filename)
@@ -542,8 +539,8 @@ def main():
     NAV_X, NAV_Y, NAV_HEAD  = [],[],[]
     
     # Initialize some constants
-    nav_aid_max_dist = 2000
-    landmark_max_dist = 10000
+    nav_aid_max_dist = 1500
+    landmark_max_dist = 5000
     underwater_max_dist = 250 #  Somewhere between 250m and 500m
     sensor_head = 15 # degrees
     sensor_FoV_ang = 45
@@ -591,6 +588,7 @@ def main():
             # Build the spatical filter
             poly_filter = build_filter(landmark_max_dist, X, Y, cor_head, sensor_FoV_ang, -sensor_head, 1, 'Landmark')
             
+            obj1, dist, xpos_l, ypos_l = [],[],[],[]
             landmark_objects = ''
             # Cycle through the Landmarks
             for i in range(len(Landmarks)):
@@ -611,21 +609,57 @@ def main():
                         pt_lon = geom.GetX()
                         pt_lat = geom.GetY()
                     obj_type = category_landmark(feat)
-                    obj = obj_type + ' --> Long: ' + str(pt_lon)+ ', Lat: ' + str(pt_lat)
-                    landmark_objects += obj
-                    print obj
+                    pt_x, pt_y = LonLat2MOOSxy(pt_lon,pt_lat)
+                    
+                    xpos_l.append(pt_x)
+                    ypos_l.append(pt_y)
+                    # Calc dist to Landmark
+                    d = np.sqrt(np.power(pt_x-X,2)+np.power(pt_y-Y,2))
+                    print 'x = %f, y = %f, dist = %f' %(pt_x, pt_y, d)
+                    dist.append(d)
+#                    print "dist1: %f"%d
+                    obj1.append(obj_type + ',Long:' + str(pt_lon)+ ',Lat:' + str(pt_lat)+ ',' +str(d))
                     feat = layer.GetNextFeature()
-                    if feat is not None:
+                        
+            # Only output out the closest 5 landmarks
+            cntr = 0  
+            num_landmarks = len(dist)
+            
+            if len(dist)>5:
+                # Sort the landmarks by distance away from the ASV and only
+                #   store the closest 5
+                for ii in (sorted(range(num_landmarks), key=lambda j: dist[j])[:5]):
+                    landmark_objects += obj1[ii]
+                    time.sleep(.002)
+                    print 'x='+str(xpos_l[ii])+', y='+str(ypos_l[ii]) + ',dist='+str(dist[ii])
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_l[ii])+',y='+str(ypos_l[ii])+',radius=20,pts=5,edge_color=pink,label=landmark_'+str(cntr))
+                    if cntr < 4:
                         landmark_objects += '!'
-                print ''
-                if landmark_objects != '':
-                    comms.notify('Landmarks', landmark_objects)
+                    cntr += 1
+            else:
+                for ij in range(num_landmarks):
+                    landmark_objects += obj1[ij]
+                    time.sleep(.002)
+                    print 'x='+str(xpos_l[ij])+', y='+str(ypos_l[ij])
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_l[ij])+',y='+str(ypos_l[ij])+',radius=20,pts=5,edge_color=pink,label=landmark_'+str(ij))
+                    if ij < num_landmarks-1:
+                        landmark_objects += '!'
+                for j in range(num_landmarks, 5):
+                    time.sleep(.002)
+                    poly = 'format=radial,x= 0,y=0,radius=25,pts=8,edge_size=5,vertex_size=2,active=false,label=landmark_'+str(j)
+                    comms.notify('VIEW_POLYGON', poly)
+            if landmark_objects != '':
+                print landmark_objects
+                comms.notify('Landmarks', landmark_objects)
             layer.SetSpatialFilter(None)
+            print ''
+            
             
             ## Navigational Aids
             # Build the spatical filter
             poly_filter = build_filter(nav_aid_max_dist, X, Y, cor_head, sensor_FoV_ang, sensor_head, 1, 'Nav_aid')
             
+            obj2, dist, xpos_na, ypos_na = [],[],[],[]
             nav_aid_objects = ''
             # Cycle through the Navigational aids
             for i in range(len(Nav_aids)):
@@ -645,22 +679,59 @@ def main():
                     else:
                         pt_lon = geom.GetX()
                         pt_lat = geom.GetY()
+                        
                     obj_type = category_nav_aid(feat, Nav_aids[i])
-                    obj = obj_type + ' --> Long: ' + str(pt_lon)+ ', Lat: ' + str(pt_lat)
-                    nav_aid_objects += obj
-                    print obj
+                    pt_x, pt_y = LonLat2MOOSxy(pt_lon,pt_lat)
+                    
+                    xpos_na.append(pt_x)
+                    ypos_na.append(pt_y)
+                    # Calc dist to Landmark
+                    d = np.sqrt(np.power(pt_x-X,2)+np.power(pt_y-Y,2))
+                    print 'x = %f, y = %f, dist = %f' %(pt_x, pt_y, d)
+                    
+#                    print "dist2: %f"%d
+                    dist.append(d)
+                    obj2.append(obj_type + ',Long:' + str(pt_lon)+ ',Lat:' + str(pt_lat)+ ',' +str(d))
                     feat = layer.GetNextFeature()
-                    if feat is not None:
+
+            # Only output the closest 5 Nav_Aids
+            cntr = 0
+            num_nav_aid = len(dist)
+            if num_nav_aid>5:
+                # Sort the Navigational Aids by distance away from the ASV and 
+                #   only store the closest 5
+                for ii in (sorted(range(num_nav_aid), key=lambda j: dist[j])[:5]):
+                    nav_aid_objects += obj2[ii]
+                    time.sleep(.002)
+                    print 'x='+str(xpos_na[ii])+', y='+str(ypos_na[ii])
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_na[ii])+',y='+str(ypos_na[ii])+',radius=20,pts=5,edge_color=darkorange,label=nav_aid_'+str(cntr))
+                    if cntr < 4:
                         nav_aid_objects += '!'
-                print ''
-                if nav_aid_objects != '':
-                    comms.notify('Nav_Aids', nav_aid_objects)
+                    cntr += 1
+            else:
+                for ij in range(num_nav_aid):
+                    nav_aid_objects += obj2[ij]
+                    time.sleep(.002)
+                    print 'x='+str(xpos_na[ij])+', y='+str(ypos_na[ij])
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_na[ij])+',y='+str(ypos_na[ij])+',radius=20,pts=5,edge_color=darkorange,label=nav_aid_'+str(ij))
+                    if ij < num_nav_aid-1:
+                        nav_aid_objects += '!'
+                for j in range(num_nav_aid, 5):
+                    time.sleep(.002)
+                    poly = 'format=radial,x= 0,y=0,radius=25,pts=8,edge_size=5,vertex_size=2,active=false,label=nav_aid_'+str(j)
+                    comms.notify('VIEW_POLYGON', poly)
+            if nav_aid_objects != '':
+                print nav_aid_objects
+                comms.notify('Nav_Aids', nav_aid_objects)
             layer.SetSpatialFilter(None)
+            print ''                    
+            
             
             ## Underwater Objects
             # Build the spatical filter
             poly_filter = build_filter(underwater_max_dist, X, Y, cor_head, sensor_FoV_ang, 0, 1, 'Underwater')
             
+            obj3, dist, xpos_u, ypos_u = [],[],[],[]
             underwater_objects = ''
             # Cycle through the Underwater Objects
             for i in range(len(Underwater)):
@@ -670,7 +741,7 @@ def main():
                 
                 # print all 
                 feat = layer.GetNextFeature()
-                print Underwater[i] + ' Objects: '+str(layer.GetFeatureCount())
+#                print Underwater[i] + ' Objects: '+str(layer.GetFeatureCount())
                 while feat:
                     geom = feat.GetGeometryRef()
                     geom_name = geom.GetGeometryName()
@@ -682,17 +753,50 @@ def main():
                         pt_lon = geom.GetX()
                         pt_lat = geom.GetY()
                     obj_type = category_underwater(feat, Underwater[i])
-                    obj = obj_type + ' --> Long: ' + str(pt_lon)+ ', Lat: ' + str(pt_lat)
-                    underwater_objects += obj
-                    print obj
+                    pt_x, pt_y = LonLat2MOOSxy(pt_lon,pt_lat)
+                    
+                    xpos_u.append(pt_x)
+                    ypos_u.append(pt_y)
+                    # Calc dist to Landmark
+                    d = np.sqrt(np.power(pt_x-X,2)+np.power(pt_y-Y,2))
+                    
+                    print 'x = %f, y = %f, dist = %f' %(pt_x, pt_y, d)
+                    dist.append(d)
+                    obj3.append(obj_type + ',Long:' + str(pt_lon)+ ',Lat:' + str(pt_lat)+ ',' +str(d))
                     feat = layer.GetNextFeature()
-                    if feat is not None:
+                    
+            # Only output the closest 5 Underwater Objects
+            cntr = 0
+            num_underwater = len(dist)
+            if num_underwater>5:
+                # Sort the Underwater Objects by distance away from the ASV and 
+                #   only store the closest 5
+                for ii in (sorted(range(num_underwater), key=lambda j: dist[j])[:5]):
+                    underwater_objects += obj3[ii]
+                    print 'x='+str(xpos_u[ii])+', y='+str(ypos_u[ii])
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_u[ii])+',y='+str(ypos_u[ii])+',radius=20,pts=5,edge_color=dogerblue,label=underwater_'+str(cntr))                  
+                    time.sleep(.002)
+                    if cntr < 4:
                         underwater_objects += '!'
-                print ''
-                if underwater_objects != '':
-                    comms.notify('Underwater_Objects', underwater_objects)
+                    cntr += 1
+            else:
+                for ij in range(num_underwater):
+                    underwater_objects += obj3[ij]
+                    time.sleep(.002)
+                    print 'x='+str(xpos_u[ij])+', y='+str(ypos_u[ij])
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_u[ij])+',y='+str(ypos_u[ij])+',radius=20,pts=5,edge_color=dogerblue,label=underwater_'+str(ij))
+                    if ij < num_underwater-1:
+                        underwater_objects += '!'
+                for j in range(num_underwater, 5):
+                    time.sleep(.002)
+                    poly = 'format=radial,x= 0,y=0,radius=25,pts=8,edge_size=5,vertex_size=2,active=false,label=underwater_'+str(j)
+                    comms.notify('VIEW_POLYGON', poly)
+            if underwater_objects != '':
+                print underwater_objects
+                comms.notify('Underwater_Objects', underwater_objects)
             layer.SetSpatialFilter(None)
-            
+            print ''                     
+                    
 #==============================================================================
         # MOOS freaks out when nothing is posted to the DB so post this dummy
         #   variable to avoid this problem if nothing was posted during the l
@@ -702,23 +806,3 @@ def main():
 
 if __name__ == "__main__":
     main()   
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
