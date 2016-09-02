@@ -45,11 +45,11 @@ def MOOSxy2LonLat(x, y):
 #==============================================================================
 # Convert Longitude and Latitude to MOOS x,y
 #==============================================================================
-def LonLat2MOOSxy(lat, lon):
-    x,y = LonLat2UTM(lat, lon)
+def LonLat2MOOSxy(lon, lat):
+    x,y = LonLat2UTM(lon, lat)
     x += -x_origin
     y += -y_origin
-    return x,y
+    return x,y 
 
 #==============================================================================
 ## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
@@ -69,57 +69,68 @@ def ang4MOOS(angle):
     
     
 # Converts the number stored in Category of Landmark to a string
-def category_landmark(feat):
-    index = feat.GetField(11)
-    if index == '1':
-        return 'Cairn'
-    elif index =='2':
-        return 'Cemetery'
-    elif index =='3':
-        return 'Chimney'
-    elif index =='4':
-        return 'Dish Aerial'
-    elif index =='5':
-        return 'Flagstaff'
-    elif index =='6':
-        return 'Flare Stack'
-    elif index == '7':
-        return 'Mast'
-    elif index == '8':
-        return 'Windsock'
-    elif index =='9':
-        return 'Monument'
-    if index == '10':
-        return 'Column'
-    if index == '11':
-        return 'Memorial Plaque'
-    if index == '12':
-        return 'Obelisk'
-    if index == '13':
-        return 'Statue'
-    if index == '14':
-        return 'Cross'
-    if index == '15':
-        return 'Dome'
-    if index == '16':
-        return 'Radar Scanner'
-    if index == '17':
-        return 'Tower'
-    if index == '18':
-        return 'Windmill'
-    if index == '19':
-        return 'Windmotor'
-    elif index =='20':
-        return 'Spire'
-    elif index =='21':
-        return 'Large On Land Rock'
-    else:
-        return 'Unknown Landmark'
+def category_landmark(feat, name):
+    if name == 'LNDMRK':
+        index = str(feat.GetField(11))
+        if index == '1':
+            return 'Cairn'
+        elif index =='2':
+            return 'Cemetery'
+        elif index =='3':
+            return 'Chimney'
+        elif index =='4':
+            return 'Dish Aerial'
+        elif index =='5':
+            return 'Flagstaff'
+        elif index =='6':
+            return 'Flare Stack'
+        elif index == '7':
+            return 'Mast'
+        elif index == '8':
+            return 'Windsock'
+        elif index =='9':
+            return 'Monument'
+        elif index == '10':
+            return 'Column'
+        elif index == '11':
+            return 'Memorial Plaque'
+        elif index == '12':
+            return 'Obelisk'
+        elif index == '13':
+            return 'Statue'
+        elif index == '14':
+            return 'Cross'
+        elif index == '15':
+            return 'Dome'
+        elif index == '16':
+            return 'Radar Scanner'
+        elif index == '17':
+            return 'Tower'
+        elif index == '18':
+            return 'Windmill'
+        elif index == '19':
+            return 'Windmotor'
+        elif index =='20':
+            return 'Spire'
+        elif index =='21':
+            return 'Large On Land Rock'
+        else:
+            return 'Unknown Landmark'
+    elif name == 'SILTNK':
+        index = str(feat.GetField(12))
+        if index == '1':
+            return 'Silo'
+        elif index =='2':
+            return 'Tank'
+        elif index =='3':
+            return 'Grain Elevator'
+        elif index =='4':
+            return 'Water Tower'
 
 # Converts the number stored in Category of Special Purpose Beacon/Buoy to 
 #   string
 def category_SPP(feat):
-    index = feat.GetField(12) 
+    index = str(feat.GetField(12))
     if index == '1':
         return 'Firing Danger Area'
     elif index =='2':
@@ -138,25 +149,25 @@ def category_SPP(feat):
         return 'Outfall'
     elif index =='9':
         return 'ODAS'
-    if index == '10':
+    elif index == '10':
         return 'Recording'
-    if index == '11':
+    elif index == '11':
         return 'Seaplane Anchorage'
-    if index == '12':
+    elif index == '12':
         return 'Recreation'
-    if index == '13':
+    elif index == '13':
         return 'Private'
-    if index == '14':
+    elif index == '14':
         return 'Mooring'
-    if index == '15':
+    elif index == '15':
         return 'LANDBY'
-    if index == '16':
+    elif index == '16':
         return 'Leading'
-    if index == '17':
+    elif index == '17':
         return 'Measured Distance'
-    if index == '18':
+    elif index == '18':
         return 'Notice'
-    if index == '19':
+    elif index == '19':
         return 'TSS'
     elif index =='20':
         return 'Ancoring Prohibited'
@@ -233,7 +244,7 @@ def category_SPP(feat):
 
 # Converts the number stored in Category of Lateral Beacon/Buoy to string    
 def category_LAT(feat):
-    index = feat.GetField(12) 
+    index = str(feat.GetField(12))
     if index == '1':
         return 'Port-hand'
     elif index =='2':
@@ -247,7 +258,7 @@ def category_LAT(feat):
 
 # Converts the number stored in Category of Cardinal Beacon/Buoy to string      
 def category_CAR(feat):
-    index = feat.GetField(12) 
+    index = str(feat.GetField(12))
     if index == '1':
         return 'North'
     elif index =='2':
@@ -261,6 +272,7 @@ def category_CAR(feat):
 
 # Converts the number stored in Color to string
 def obj_color(index):
+    index = str(index)
     if index == '1':
         return 'White'
     elif index =='2':
@@ -279,20 +291,20 @@ def obj_color(index):
         return 'Brown'
     elif index =='9':
         return 'Amber'
-    if index == '10':
+    elif index == '10':
         return 'Violet'
-    if index == '11':
+    elif index == '11':
         return 'Orange'
-    if index == '12':
+    elif index == '12':
         return 'Magenta'
-    if index == '13':
+    elif index == '13':
         return 'Pink'
     else:
         return 'Unknown Color'
         
 # Converts the number stored in Category of Lights to string    
 def category_lights(feat):
-    index = feat.GetField(12)
+    index = str(feat.GetField(12))
     if index == '1':
         return 'Directional Function'
 #        #Index 2 and 3 are not used
@@ -312,25 +324,25 @@ def category_lights(feat):
         return 'Flood'
     elif index =='9':
         return 'Strip'
-    if index == '10':
+    elif index == '10':
         return 'Subsidiary'
-    if index == '11':
+    elif index == '11':
         return 'Spot'
-    if index == '12':
+    elif index == '12':
         return 'Front'
-    if index == '13':
+    elif index == '13':
         return 'Rear'
-    if index == '14':
+    elif index == '14':
         return 'Lower'
-    if index == '15':
+    elif index == '15':
         return 'Upper'
-    if index == '16':
+    elif index == '16':
         return 'Moire Effect'
-    if index == '17':
+    elif index == '17':
         return 'Emergency'
-    if index == '18':
+    elif index == '18':
         return 'Bearing'
-    if index == '19':
+    elif index == '19':
         return 'Horizontally Disposed'
     elif index =='20':
         return 'Vertically Disposed'
@@ -339,7 +351,7 @@ def category_lights(feat):
 
 # Converts the number stored in Category of Wreck to string  
 def category_wreck(feat):
-    index = feat.GetField(11)
+    index = str(feat.GetField(11))
     if index == '1':
        return 'Non-Dangerous Wreck'
     elif index =='2':
@@ -355,6 +367,7 @@ def category_wreck(feat):
 
 # Converts the number stored in Water Level Attribute to string     
 def water_level(index):
+    index = str(index)
     if index == '1':
         return 'is Partly Submerged at High Water'
     elif index =='2':
@@ -479,17 +492,17 @@ def build_filter(max_dist, in1, in2, ASV_head, sensor_FoV_ang, sensor_head, UTM_
     C_y = y+hypot*np.sin(ang2*np.pi/180)
     
     # Print it to pMarnineViewer
-#    print 'ASV: ' + str(ASV_head)+', A: ' + str(ang1)+', B:' + str(ang2)
+    print 'ASV: ' + str(ASV_head)+', A: ' + str(ang1)+', B:' + str(ang2)
 #    if f_type == 'Underwater':
-#        color = 'edge_color=blue'
+    color = 'edge_color=blue'
 #    elif f_type == 'Landmark':
 #        color = 'edge_color=salmon'
 #    elif f_type == 'Nav_aid':
 #        color = 'edge_color=seagreen'
-#    FoV_Filter = 'pts={'+str(A_x)+','+str(A_y)+':'+str(B_x)+','+str(B_y)+':'+str(C_x)+','+str(C_y)+'},label=Sensor_FoV_'+f_type+','+color
-#    
-#    time.sleep(.001)
-#    comms.notify('VIEW_POLYGON', FoV_Filter, pymoos.time()) 
+    FoV_Filter = 'pts={'+str(A_x)+','+str(A_y)+':'+str(B_x)+','+str(B_y)+':'+str(C_x)+','+str(C_y)+'},label=Sensor_FoV_'+f_type+','+color
+    
+    time.sleep(.001)
+    comms.notify('VIEW_POLYGON', FoV_Filter, pymoos.time()) 
     
     # Initialize filers
     ring_filter = ogr.Geometry(ogr.wkbLinearRing)
@@ -515,7 +528,7 @@ def build_filter(max_dist, in1, in2, ASV_head, sensor_FoV_ang, sensor_head, UTM_
 #==============================================================================
 def main(): 
 #    # Time Warp and Scaling factor constant
-#    time_warp = 1
+#    time_warp = 2
 #    scaling_factor = 0.04*time_warp    
 #    
 #    # Set the timewarp and scale factor
@@ -530,7 +543,7 @@ def main():
     
     # The layers that we care about are:
     Nav_aids =  ['LIGHTS', 'BOYSPP', 'BOYISD', 'BOYSAW', 'BOYLAT', 'BCNSPP', 'BCNLAT']
-    Landmarks = ['LNDMRK']
+    Landmarks = ['LNDMRK', 'SILTNK']
     Underwater = ['UWTROC', 'WRECKS']
     
     # Register for desired variables
@@ -539,10 +552,10 @@ def main():
     NAV_X, NAV_Y, NAV_HEAD  = [],[],[]
     
     # Initialize some constants
+    landmark_max_dist = 3000
     nav_aid_max_dist = 1500
-    landmark_max_dist = 5000
-    underwater_max_dist = 250 #  Somewhere between 250m and 500m
-    sensor_head = 15 # degrees
+    underwater_max_dist = 500 #  Somewhere between 250m and 500m
+    sensor_head = 0#15 # degrees
     sensor_FoV_ang = 45
     
     
@@ -608,7 +621,7 @@ def main():
                     else:
                         pt_lon = geom.GetX()
                         pt_lat = geom.GetY()
-                    obj_type = category_landmark(feat)
+                    obj_type = category_landmark(feat,Landmarks[i])
                     pt_x, pt_y = LonLat2MOOSxy(pt_lon,pt_lat)
                     
                     xpos_l.append(pt_x)
@@ -632,7 +645,7 @@ def main():
                     landmark_objects += obj1[ii]
                     time.sleep(.002)
                     print 'x='+str(xpos_l[ii])+', y='+str(ypos_l[ii]) + ',dist='+str(dist[ii])
-                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_l[ii])+',y='+str(ypos_l[ii])+',radius=20,pts=5,edge_color=pink,label=landmark_'+str(cntr))
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_l[ii])+',y='+str(ypos_l[ii])+',radius=30,pts=5,edge_color=pink,label=landmark_'+str(cntr))
                     if cntr < 4:
                         landmark_objects += '!'
                     cntr += 1
@@ -641,7 +654,7 @@ def main():
                     landmark_objects += obj1[ij]
                     time.sleep(.002)
                     print 'x='+str(xpos_l[ij])+', y='+str(ypos_l[ij])
-                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_l[ij])+',y='+str(ypos_l[ij])+',radius=20,pts=5,edge_color=pink,label=landmark_'+str(ij))
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_l[ij])+',y='+str(ypos_l[ij])+',radius=30,pts=5,edge_color=pink,label=landmark_'+str(ij))
                     if ij < num_landmarks-1:
                         landmark_objects += '!'
                 for j in range(num_landmarks, 5):
@@ -704,7 +717,7 @@ def main():
                     nav_aid_objects += obj2[ii]
                     time.sleep(.002)
                     print 'x='+str(xpos_na[ii])+', y='+str(ypos_na[ii])
-                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_na[ii])+',y='+str(ypos_na[ii])+',radius=20,pts=5,edge_color=darkorange,label=nav_aid_'+str(cntr))
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_na[ii])+',y='+str(ypos_na[ii])+',radius=30,pts=5,edge_color=darkorange,label=nav_aid_'+str(cntr))
                     if cntr < 4:
                         nav_aid_objects += '!'
                     cntr += 1
@@ -713,7 +726,7 @@ def main():
                     nav_aid_objects += obj2[ij]
                     time.sleep(.002)
                     print 'x='+str(xpos_na[ij])+', y='+str(ypos_na[ij])
-                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_na[ij])+',y='+str(ypos_na[ij])+',radius=20,pts=5,edge_color=darkorange,label=nav_aid_'+str(ij))
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_na[ij])+',y='+str(ypos_na[ij])+',radius=30,pts=5,edge_color=darkorange,label=nav_aid_'+str(ij))
                     if ij < num_nav_aid-1:
                         nav_aid_objects += '!'
                 for j in range(num_nav_aid, 5):
@@ -774,7 +787,7 @@ def main():
                 for ii in (sorted(range(num_underwater), key=lambda j: dist[j])[:5]):
                     underwater_objects += obj3[ii]
                     print 'x='+str(xpos_u[ii])+', y='+str(ypos_u[ii])
-                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_u[ii])+',y='+str(ypos_u[ii])+',radius=20,pts=5,edge_color=dogerblue,label=underwater_'+str(cntr))                  
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_u[ii])+',y='+str(ypos_u[ii])+',radius=30,pts=5,edge_color=deepskyblue ,label=underwater_'+str(cntr))                  
                     time.sleep(.002)
                     if cntr < 4:
                         underwater_objects += '!'
@@ -784,7 +797,7 @@ def main():
                     underwater_objects += obj3[ij]
                     time.sleep(.002)
                     print 'x='+str(xpos_u[ij])+', y='+str(ypos_u[ij])
-                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_u[ij])+',y='+str(ypos_u[ij])+',radius=20,pts=5,edge_color=dogerblue,label=underwater_'+str(ij))
+                    comms.notify('VIEW_POLYGON', 'format=radial,x='+str(xpos_u[ij])+',y='+str(ypos_u[ij])+',radius=30,pts=5,edge_color=deepskyblue ,label=underwater_'+str(ij))
                     if ij < num_underwater-1:
                         underwater_objects += '!'
                 for j in range(num_underwater, 5):
@@ -806,23 +819,4 @@ def main():
 
 if __name__ == "__main__":
     main()   
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

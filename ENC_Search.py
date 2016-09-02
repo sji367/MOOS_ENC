@@ -42,8 +42,8 @@ def MOOSxy2LonLat(x, y):
 #==============================================================================
 # Convert Longitude and Latitude to MOOS x,y
 #==============================================================================
-def LonLat2MOOSxy(lat, lon):
-    x,y = LonLat2UTM(lat, lon)
+def LonLat2MOOSxy(lon, lat):
+    x,y = LonLat2UTM(lon, lat)
     x += -x_origin
     y += -y_origin
     return x,y  
@@ -243,7 +243,7 @@ def polygon(ASV_X, ASV_Y, heading, feature, intersect, TF_intersect, cntr):
 #==============================================================================
 def main():
 #    # Time Warp and Scaling factor constant
-#    time_warp = 1
+#    time_warp = 2
 #    scaling_factor = 0.04*time_warp
 #    
 #    # Set the timewarp and scale factor

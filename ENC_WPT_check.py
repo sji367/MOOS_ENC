@@ -44,11 +44,11 @@ def MOOSxy2LonLat(x, y):
 #==============================================================================
 # Convert Longitude and Latitude to MOOS x,y
 #==============================================================================
-def LonLat2MOOSxy(lat, lon):
-    x,y = LonLat2UTM(lat, lon)
+def LonLat2MOOSxy(lon, lat):
+    x,y = LonLat2UTM(lon, lat)
     x += -x_origin
     y += -y_origin
-    return x,y
+    return x,y 
     
 #==============================================================================
 ## Register for updates of the MOOS variables NAV_X and NAV_Y once every second
@@ -226,7 +226,7 @@ def latlongBuffer(x, y, des_buffer, UTM):
 #==============================================================================
 def main(): 
 #    # Time Warp and Scaling factor constant
-#    time_warp = 1
+#    time_warp = 2
 #    scaling_factor = 0.04*time_warp    
 #    
 #    # Set the timewarp and scale factor
@@ -415,8 +415,8 @@ def main():
                     check_within = True
                     
                     print str(cur_x_int) +', '+str(cur_y_int)
-                    if isinstance(cur_x_int, float):
-                        comms.notify('VIEW_POINT','x='+str(cur_x_int) +','+'y='+str(cur_y_int)+',vertex_size=6.5,vertex_color=invisible,active=true,label=int')
+#                    if isinstance(cur_x_int, float):
+                    comms.notify('VIEW_POINT','x='+str(cur_x_int) +','+'y='+str(cur_y_int)+',vertex_size=6.5,vertex_color=pink,active=true,label=int')
                     x_int.append(cur_x_int)
                     y_int.append(cur_y_int)
                     

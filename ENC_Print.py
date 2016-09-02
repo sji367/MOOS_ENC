@@ -16,6 +16,8 @@ import pymoos
 # Used for delays
 import time
 
+import csv
+
 #==============================================================================
 # Initialize Globals
 #==============================================================================
@@ -37,12 +39,12 @@ def MOOSxy2LonLat(x, y):
 #==============================================================================
 # Convert Longitude and Latitude to MOOS x,y
 #==============================================================================
-def LonLat2MOOSxy(lat, lon):
-    x,y = LonLat2UTM(lat, lon)
+def LonLat2MOOSxy(lon, lat):
+    x,y = LonLat2UTM(lon, lat)
     x += -x_origin
     y += -y_origin
-    return x,y
-
+    return x,y 
+    
 #=============================================================================#
 # This code determines if each point along a line is within a polygon and if it
 #   is it outputs that line. If the line intersects the polygon multiple times,
@@ -103,7 +105,7 @@ def on_connect():
 
 def main():
 #    # Time Warp and Scaling factor constant
-#    time_warp = 1
+#    time_warp = 2
 #    scaling_factor = 0.04*time_warp    
 #    
 #    # Set the timewarp and scale factor
@@ -111,19 +113,38 @@ def main():
 #    comms.set_comms_control_timewarp_scale_factor(scaling_factor)
     
     comms.set_on_connect_callback(on_connect);
-    comms.run('localhost',9000,'print')
+    comms.run('localhost',9000,'print1')
     
     # Start by creating the baseline for the search area polygon 
     ring = ogr.Geometry(ogr.wkbLinearRing)
     poly_filter = ogr.Geometry(ogr.wkbPolygon)
     
-    lon1, lat1 = MOOSxy2LonLat(5800,-7935)
-    lon2, lat2 = MOOSxy2LonLat(9100,-10525)
-    N_lat = lat1#43.998441#07511878
-    E_long = lon1#-70.588728#68395689
-    S_lat = lat2#43.968954#05780589
-    W_long = lon2#-70.634514#72434189
+#    # Landmarks
+#    lon1, lat1 = MOOSxy2LonLat(5719,-9353)
+#    lon2, lat2 = MOOSxy2LonLat(8807,-11539)    
     
+#    # Poly obstacles 2
+    lon1, lat1 = MOOSxy2LonLat(1606,-1184)
+    lon2, lat2 = MOOSxy2LonLat(2076,-1462)
+#    
+#    lon1, lat1 = MOOSxy2LonLat(-4,-1138)
+#    lon2, lat2 = MOOSxy2LonLat(116,-1204)
+
+#    lon1, lat1 = MOOSxy2LonLat(1392,-713)
+#    lon2, lat2 = MOOSxy2LonLat(1789,-1021)
+    
+#    lon1, lat1 = MOOSxy2LonLat(1021,-835)
+#    lon2, lat2 = MOOSxy2LonLat(1291,-1119)
+#    N_lat = lat1
+#    E_long = lon1
+#    S_lat = lat2
+#    W_long = lon2
+    
+    N_lat = 43.07511878
+    E_long = -70.68395689
+    S_lat = 43.05780589
+    W_long = -70.72434189
+#    
     # Build a ring of the points fot the search area polygon
     ring.AddPoint(W_long, N_lat)
     ring.AddPoint(E_long, N_lat)
@@ -132,7 +153,6 @@ def main():
     ring.AddPoint(W_long, N_lat)
     poly_filter.AddGeometry(ring) # Add the ring to the previously created polygon
      
-    
     #easily mark all of the output and input files
     file_pnt = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_pnt2.shp'
     file_poly = '/home/mapper/Desktop/MOOS_ENC/Data/US5NH02M/Shape/ENC_poly2.shp'
@@ -153,14 +173,15 @@ def main():
     # Filter the layer to only include features with Threat level > 0
     layer.SetSpatialFilter(poly_filter) 
 #    layer.SetAttributeFilter("T_lvl != '0'")
-#    print '# of Features in Filter: %d' %layer.GetFeatureCount()
+#    layer.SetAttributeFilter("Type = LIGHTS")
+    print '# of Features in Filter: %d' %layer.GetFeatureCount()
     
     feature = layer.GetNextFeature()
     cnt = 1
     while feature:    
         geom = feature.GetGeometryRef()
         t_lvl = feature.GetField(0) # Get the Threat Level for that feature
-        time.sleep(.02) # Don't make it faster or it wont print all of the points
+        time.sleep(.1) # Don't make it faster or it wont print all of the points
 
         # Convert the MOOS x,y position to Lat/Long and store it
         new_x, new_y = LonLat2MOOSxy (geom.GetX(), geom.GetY())
@@ -170,42 +191,40 @@ def main():
         if t_lvl == 5:
             color = 'vertex_color=black,'
         elif t_lvl == 4:
-            #size = 'vertex_size=12,'
             color = 'vertex_color=red,'
         elif t_lvl == 3:
-            #size = 'vertex_size=9,'
             color = 'vertex_color=darkorange,'
         elif t_lvl == 2:
-            #size = 'vertex_size=7,'
             color = 'vertex_color=gold,'
         elif t_lvl == 1:
-            #size = 'vertex_size=5,'
             color = 'vertex_color=greenyellow,'
         elif t_lvl == 0:
-            #size = 'vertex_size=3,'
             color = 'vertex_color=green,'
         elif t_lvl == -1: # Landmark
             color = 'vertex_color=violet'
+        elif t_lvl == -2: # LIGHTS
+            color = 'vertex_color=cornflowerblue,'
+        
         size =  'vertex_size=10,'   
-        m = location+size+color#+label+' ' + str(cnt)
+        m = location+size+color
         cnt = 1+cnt
         
         # Print the point
         comms.notify('VIEW_POINT', m)
-#        print pymoos.time()-t
         feature = layer.GetNextFeature()
         
 ###############################################################################
 ##########               Print the Polygons Obstacles                ##########
 ###############################################################################
     ds = driver.Open(file_poly, 0)
-    
+    outfile_mp = file('poly2.csv', 'wb')
+    writer_mp = csv.writer(outfile_mp, delimiter=',', quoting=csv.QUOTE_MINIMAL)
     # There is only one layer in each file and we want to open it
     layer = ds.GetLayer()
     
     # Filter the layer to only include features within the area in 
     #   pMarnineViewer
-#    layer.SetSpatialFilter(poly_filter)
+    layer.SetSpatialFilter(poly_filter)
 #    print 'Num of Features in Filter: %d' %layer.GetFeatureCount()
     feature = layer.GetFeature(0)
     while feature:
@@ -213,7 +232,7 @@ def main():
         geom = feature.GetGeometryRef() # Polygon from shapefile
         # Get the interesection of the polygon from the shapefile and the
         #   outline of tiff from pMarnineViewer
-        intersection_poly = geom#.Intersection(poly_filter) 
+        intersection_poly = geom.Intersection(poly_filter) 
         
         # Get the ring of that intersection polygon
         p_ring = intersection_poly.GetGeometryRef(0) 
@@ -225,13 +244,17 @@ def main():
             vertex = 'pts={' # String to hold the vertices
             # Cycle through the vertices and store them as a string
             for p1 in xrange(points):
+                xy = []
                 lon, lat, z = p_ring.GetPoint(p1)
                 p_x,p_y = LonLat2MOOSxy (lon, lat)
                 vertex += str(p_x) + ','+ str(p_y)
+                xy.append(p_x)
+                xy.append(p_y)
+                writer_mp.writerow(xy)
                 if (p1!=points-1):
                     vertex += ':'
             t_lvl = feature.GetField(0) # Get threat level
-        
+            writer_mp.writerow([0,0])
             # Change the Color of the point based on the Threat Level
             if t_lvl == 5:
                 color = 'edge_color=black, vertex_color=black'
@@ -245,13 +268,11 @@ def main():
                 color = 'edge_color=blue,vertex_color=yellowgreen'
             elif t_lvl == 0:
                 color = 'edge_color=green,vertex_color=green'
-                
-            
+              
             if points != 0:
                 comms.notify('VIEW_SEGLIST', vertex+'},vertex_size=2.5,edge_size=2,'+color)
-#            print pymoos.time()+t
         feature = layer.GetNextFeature()
-        
+    outfile_mp.close()
 ###############################################################################
 ##########                 Print the Line Obstacles                  ##########
 ###############################################################################

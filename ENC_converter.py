@@ -65,52 +65,113 @@ def fields(ds,LayerName):
     for i in range(layer_def.GetFieldCount()):
         print str(i) + ': ' + layer_def.GetFieldDefn(i).GetName()
 
-# Converts the number stored in category of Landmark to a string
-def category_landmark(index):
+# Converts the number stored in Category of Lights to string    
+def category_lights(feat):
+    index = str(feat.GetField(12))
     if index == '1':
-        return 'Cairn'
-    elif index =='2':
-        return 'Cemetery'
-    elif index =='3':
-        return 'Chimney'
+        return 'Directional Function'
+#        #Index 2 and 3 are not used
+#    elif index =='2':
+#        return ''
+#    elif index =='3':
+#        return ''
     elif index =='4':
-        return 'Dish_aerial'
+        return 'Leading'
     elif index =='5':
-        return 'Flagstaff'
+        return 'Aero'
     elif index =='6':
-        return 'Flare_stack'
+        return 'Air Obstruction'
     elif index == '7':
-        return 'Mast'
+        return 'Fog Detector'
     elif index == '8':
-        return 'Windsock'
+        return 'Flood'
     elif index =='9':
-        return 'Monument'
+        return 'Strip'
     if index == '10':
-        return 'Column'
+        return 'Subsidiary'
     if index == '11':
-        return 'Memorial_plaque'
+        return 'Spot'
     if index == '12':
-        return 'Obelisk'
+        return 'Front'
     if index == '13':
-        return 'Statue'
+        return 'Rear'
     if index == '14':
-        return 'Cross'
+        return 'Lower'
     if index == '15':
-        return 'Dome'
+        return 'Upper'
     if index == '16':
-        return 'Radar_scanner'
+        return 'Moire Effect'
     if index == '17':
-        return 'Tower'
+        return 'Emergency'
     if index == '18':
-        return 'Windmill'
+        return 'Bearing'
     if index == '19':
-        return 'Windmotor'
+        return 'Horizontally Disposed'
     elif index =='20':
-        return 'Spire'
-    elif index =='21':
-        return 'Large_rock'
+        return 'Vertically Disposed'
     else:
-        return 'Unknown'
+        return 'Marine'
+
+# Converts the number stored in category of Landmark or Silo/Tank to a string
+def category_landmark(feat, name):
+    if name == 'LNDMRK':
+        index = str(feat.GetField(11))
+        if index == '1':
+            return 'Cairn'
+        elif index =='2':
+            return 'Cemetery'
+        elif index =='3':
+            return 'Chimney'
+        elif index =='4':
+            return 'Dish Aerial'
+        elif index =='5':
+            return 'Flagstaff'
+        elif index =='6':
+            return 'Flare Stack'
+        elif index == '7':
+            return 'Mast'
+        elif index == '8':
+            return 'Windsock'
+        elif index =='9':
+            return 'Monument'
+        elif index == '10':
+            return 'Column'
+        elif index == '11':
+            return 'Memorial Plaque'
+        elif index == '12':
+            return 'Obelisk'
+        elif index == '13':
+            return 'Statue'
+        elif index == '14':
+            return 'Cross'
+        elif index == '15':
+            return 'Dome'
+        elif index == '16':
+            return 'Radar Scanner'
+        elif index == '17':
+            return 'Tower'
+        elif index == '18':
+            return 'Windmill'
+        elif index == '19':
+            return 'Windmotor'
+        elif index =='20':
+            return 'Spire'
+        elif index =='21':
+            return 'Large On Land Rock'
+        else:
+            return 'Unknown Landmark'
+    elif name == 'SILTNK':
+        index = str(feat.GetField(12))
+        if index == '1':
+            return 'Silo'
+        elif index =='2':
+            return 'Tank'
+        elif index =='3':
+            return 'Grain Elevator'
+        elif index =='4':
+            return 'Water Tower'
+        else:
+            return 'Unknown'
 
 # Converts the ENC File to 3 different shape files    
 def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
@@ -148,8 +209,13 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
         # If it is Land set threat level to 5
         elif LayerName == 'LNDARE' or LayerName == 'DYKCON' or LayerName == 'PONTON' or LayerName == 'COALNE':
             t_lvl = 5
+        elif LayerName == 'LIGHTS':
+            t_lvl = -2
+#            print category_lights(feat)
+#            print str(geom.GetX())+', '+str(geom.GetY())
+#            print feat.GetField(35)
         # If it is a Buoy, Light or Beacon set threat level to 3
-        elif LayerName == 'LIGHTS' or LayerName == 'BOYISD' or LayerName == 'BOYSPP' or LayerName == 'BOYSAW' or LayerName == 'BOYLAT' or LayerName == 'BCNSPP' or LayerName == 'BCNLAT':
+        elif LayerName == 'BOYISD' or LayerName == 'BOYSPP' or LayerName == 'BOYSAW' or LayerName == 'BOYLAT' or LayerName == 'BCNSPP' or LayerName == 'BCNLAT':
             t_lvl = 3
         elif LayerName == 'LNDMRK':
             t_lvl = -1
@@ -171,12 +237,17 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
         new_feat.SetField('T_lvl', t_lvl)
         new_feat.SetField('Type', LayerName)
         if LayerName == 'LNDMRK':
-            c = category_landmark(feat.GetField(11))
+            c = category_landmark(feat,LayerName)
             if c is not None and feat.GetField(16) is not None:
-                print 'Cat: ' + category_landmark(feat.GetField(11)) + ', Vis: '+ str(2-feat.GetField(16))
-            new_feat.SetField('Cat', category_landmark(feat.GetField(11))) # Category - store as string and not a #
+                print 'Cat: ' + c + ', Vis: '+ str(2-feat.GetField(16))
+            new_feat.SetField('Cat', c) # Category - store as string and not a number
             new_feat.SetField('Visual', 2-feat.GetField(16)) # Visually Conspicuous (Y - store as 1, N - store as 0)
-    
+        if LayerName == 'SILTNK':
+            c = category_landmark(feat,LayerName)
+            if c is not None and feat.GetField(17) is not None:
+                print 'Cat: ' + c + ', Vis: '+ str(2-feat.GetField(17))
+            new_feat.SetField('Cat', c) # Category - store as string and not a #
+            new_feat.SetField('Visual', 2-feat.GetField(17)) # Visually Conspicuous (Y - store as 1, N - store as 0)
         # Make a geometry from wkt object
         obj = ogr.CreateGeometryFromWkt(wkt)
         new_feat.SetGeometry(obj)
@@ -243,6 +314,7 @@ def enc2shp(ds, LayerName, output_pnt, output_line, output_poly):
 #fields(ds, 'DYKCON') # 19 - Vertical Length
 ## Landmark
 #fields(ds, 'LNDMRK') # 11 - Category, 12 - Color, 13 - Color Patern, 16 - Conspicuous
+#fields(ds, 'SILTNK') # 12 - Category, 13 - Color, 14 - Color Patern, 17 - Conspicuous
 
 ##---------------------------------------------------------------------------##
 # Path to the ENC and output shapefiles
@@ -334,6 +406,7 @@ layer_pnt, layer_line, layer_poly = enc2shp(ds, 'PONTON', layer_pnt, layer_line,
 layer_pnt, layer_line, layer_poly = enc2shp(ds, 'DEPCNT', layer_pnt, layer_line, layer_poly)
 layer_pnt, layer_line, layer_poly = enc2shp(ds, 'DYKCON', layer_pnt, layer_line, layer_poly)
 layer_pnt, layer_line, layer_poly = enc2shp(ds, 'LNDMRK', layer_pnt, layer_line, layer_poly)
+layer_pnt, layer_line, layer_poly = enc2shp(ds, 'SILTNK', layer_pnt, layer_line, layer_poly)
 
 # Close and save the files
 ds = ds_pnt = ds_line = ds_poly = None
