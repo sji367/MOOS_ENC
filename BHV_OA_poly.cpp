@@ -313,14 +313,14 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       // Deal with slope being inf --> set it = to large number
       if (obstacle.min_ang.ang == obstacle.min_dist.ang)
 	{
-	  obstacle.min_ang.m = 9999;
+	  obstacle.min_ang.m = 99;
 	}
       else
 	obstacle.min_ang.m = (obstacle.min_ang.cost-obstacle.min_dist.cost)/(obstacle.min_ang.ang-obstacle.min_dist.ang);
-
+      // Deal with slope being inf --> set it = to large number
       if (obstacle.max_ang.ang == obstacle.min_dist.ang)
 	{
-	  obstacle.max_ang.m = 9999;
+	  obstacle.max_ang.m = 99;
 	}
       else
 	obstacle.max_ang.m = (obstacle.min_dist.cost-obstacle.max_ang.cost)/(obstacle.min_dist.ang-obstacle.max_ang.ang);
@@ -339,10 +339,13 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       // The buffer distance is to make sure that the ASV avoids the obstacle with some buffer
       int buffer_width = 20;
       // Make a larger buffer if the maximum cost (aka the minimum distance) is greater than 1 
-      
+      int temp_buff;
 	if (obstacle.min_dist.cost > 1)
 	{
-	  buffer_width += floor(pow(2*obstacle.min_dist.cost,2));
+	  temp_buff = floor(pow(2*obstacle.min_dist.cost,2));
+	  if (temp_buff >100)
+	    temp_buff =100;
+	  buffer_width += temp_buff;
 	  postMessage("buffer_w", buffer_width);
 	}
    
@@ -350,11 +353,13 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       
       for (double x1 = obstacle.min_ang.ang-buffer_width; x1<=obstacle.min_dist.ang; x1++)
 	{
-	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
-	  if (obstacle.min_ang.m == 9999)
+	  // Deal with slope being inf (if maximum angle = mininum distance angle) --> set the cost to the cost of the mininum distance point. 
+	  if (obstacle.min_ang.m == 99)
 	    cost = obstacle.min_dist.cost;
 	  else
 	    cost = (obstacle.min_ang.m*x1+obstacle.min_ang.b);
+
+	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
 	  if (cost > 1)
 	    {
 	      x = doubleToString(m_ASV_x);
@@ -387,11 +392,13 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       // This calculates the utility and stores that value if it is less than the current utility for all obstacles --> max cost to max angle
       for (double x2 = obstacle.min_dist.ang; x2<=obstacle.max_ang.ang+buffer_width; x2++)
 	{
-	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
-	  if (obstacle.max_ang.m == 9999)
+	  // Deal with slope being inf (if maximum angle = mininum distance angle) --> set the cost to the cost of the mininum distance point.
+	  if (obstacle.max_ang.m == 99)
 	    cost = obstacle.min_dist.cost;
 	  else
 	    cost = (obstacle.max_ang.m*x2+obstacle.max_ang.b);
+
+	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
 	  if (cost < 0)
 	    c = 0;
 	  else if (cost > 1)
@@ -419,11 +426,18 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       all_poly_obs.push_back(obstacle);
     }
 
+  int iii = 0;
+  domain_vals.push_back(iii);
+  range_vals.push_back((int)floor(OA_util[iii]));
+
   // Set the values for the angle (domain) and utility (range)
-  for (int iii = 0; iii<360; iii++)
+  for (iii = 1; iii<360; iii++)
     {
-      domain_vals.push_back(iii);
-      range_vals.push_back((int)floor(OA_util[iii]));
+      if (OA_util[iii] != (OA_util[iii-1]))
+	{
+	  domain_vals.push_back(iii);
+	  range_vals.push_back((int)floor(OA_util[iii]));
+	}
     }
 
   head_zaic_v.setDomainVals(domain_vals);

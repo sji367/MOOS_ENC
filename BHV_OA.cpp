@@ -400,6 +400,18 @@ IvPFunction *BHV_OA::buildZAIC_Vector()
   ZAIC_Vector head_zaic_v(m_domain, "course");
   
   max_cost = *max_element(cost.begin(), cost.end());
+  postMessage("Max_cost", doubleToString(max_cost));
+  double lead;
+  // Remove the lead waypoint parameter if cost > .5
+  if (max_cost > .56)
+    postMessage("WPT_UPDATE", "lead=50");
+  else if (max_cost > .14)
+    {
+      lead = (max_cost-.14)*100+8; // Should increase linearly between 8 and 50 as the cost increases
+      postMessage("WPT_UPDATE", "lead="+doubleToString(lead));
+    }
+  else
+    postMessage("WPT_UPDATE", "lead=8");
   
   // Used for the ZAIC_Vector function
   vector<double> domain_vals, range_vals;
@@ -459,11 +471,11 @@ IvPFunction *BHV_OA::buildZAIC_Vector()
       domain_vals.push_back(iii); range_vals.push_back(OA_util[iii]);
       for (iii = 1; iii<360; iii++)
 	{
-	  if (OA_util[iii] != OA_util[iii-1])
-	    {
+	  //if (OA_util[iii] != OA_util[iii-1])
+	  // {
 	      domain_vals.push_back(iii);
 	      range_vals.push_back(OA_util[iii]);
-	    }
+	      // }
 	}
 
       head_zaic_v.setDomainVals(domain_vals);
