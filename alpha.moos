@@ -1,14 +1,17 @@
 //-------------------------------------------------
-// NAME: Val Schmidt, CCOM/JHC
-// FILE: 2015_portsmouth_M1.moos
+// NAME: Sam Reed, CCOM/JHC
+// FILE: alpha.moos
 //-------------------------------------------------
 
 ServerHost = localhost		
 ServerPort = 9000
-Community  = ASV//2015_portsmouth_M1
+Community  = ASV
 
 MOOSTimeWarp = 1
 TERM_REPORTING = true
+
+//#include plug_sensor.moos
+//#include plug_ASV_info.moos
 
 // CCOM Pier
 LatOrigin  = 43.071959194444446
@@ -20,16 +23,37 @@ ProcessConfig = ANTLER
 {
   MSBetweenLaunches = 200
 
+  Run = uProcessWatch	  @ NewConsole = false
   Run = MOOSDB          @ NewConsole = false
-  //Run = pLogger         @ NewConsole = false
+  Run = pLogger         @ NewConsole = false
   Run = uSimMarine	    @ NewConsole = false
   Run = pMarinePID      @ NewConsole = false
   Run = pHelmIvP        @ NewConsole = false
   Run = pMarineViewer	  @ NewConsole = false
-  Run = uProcessWatch	  @ NewConsole = false
   Run = pNodeReporter	  @ NewConsole = false
+	Run = pRegisterVar		@ NewConsole = false
+	Run = uFunctionVis		@ NewConsole = false
 }
-                                                                                                                             
+
+//------------------------------------------
+// uFunctionVis config block
+ProcessConfig = uFunctionVis                                    
+{                                                               
+  AppTick   = 4                                                 
+  CommsTick = 4                                                 
+}    
+
+//------------------------------------------
+// pRegisterVar config block
+
+ProcessConfig = pRegisterVar
+{
+  AppTick   = 4
+  CommsTick = 4
+	
+	buffer = 30
+	length = Length
+}                                                                                                                           
 
 //------------------------------------------
 // uProcessWatch config block
@@ -41,7 +65,7 @@ ProcessConfig = uProcessWatch
 
   summary_wait = 5
 
-  //nowatch   = uXMS*
+  nowatch   = print
   nowatch   = uMAC*
   nowatch   = uPokeDB*
   nowatch   = uTermCommand*
@@ -62,16 +86,25 @@ ProcessConfig = pLogger
   // For variables that are published in a bundle on their first post,
   // explicitly declare their logging request
 
-  Log = IVPHELM_LIFE_EVENT @ 0 NOSYNC
+  //Log = IVPHELM_LIFE_EVENT @ 0 NOSYNC
 
-  LogAuxSrc = true
-  WildCardLogging = true
-  WildCardOmitPattern = *_STATUS
-  WildCardOmitPattern = DB_VARSUMMARY
-  WildCardOmitPattern = DB_RWSUMMARY
-  WildCardExclusionLog = true
-  Log = Obstacles @ 0
-  //Log = NAV_X @ .1
+  //LogAuxSrc = true
+  //WildCardLogging = true
+  //WildCardOmitPattern = *_STATUS
+  //WildCardOmitPattern = DB_VARSUMMARY
+  //WildCardOmitPattern = DB_RWSUMMARY
+  //WildCardOmitPattern = dummy_var
+  //WildCardExclusionLog = true
+	//Log = Poly_Obs @ 0
+	//Log = C @ 0
+	//Log = Landmarks
+	//Log = Nav_Aids
+	//log = Underwater_Objects
+	Log = NAV_X @ 0
+	Log = NAV_Y @ 0
+	//Log = VIEW_SEGLIST @ 0
+	//Log = VIEW_POINT @ 0
+	//log = Next_WPT @ 0
 }
 
 //------------------------------------------
@@ -82,8 +115,10 @@ ProcessConfig = uSimMarine
   AppTick	= 4
   CommsTick	= 4
 
-  start_x       = 50//0
-  start_y       = -1070//-20
+  start_x       = 6600//7615
+  //start_x       = 1889//-25//877//0//50//1473//1000//
+  start_y       = -10300//-8433
+  //start_y       = -1296//-1100//-949//-20 //-1070//-885//-981//
   start_heading = 180
   start_speed   = 0
 
@@ -98,15 +133,14 @@ ProcessConfig = uSimMarine
 
 ProcessConfig = pHelmIvP
 {
-  AppTick    = 10
-  AppTick    = 4
-  CommsTick  = 4
+  AppTick    = 1
+  CommsTick  = 1
 
   term_report_interval=0
 
   bhv_dir_not_found_ok = true
   //ivp_behavior_dir = /home/mapper/moos-ivp/moos-ivp-extend/lib
-  ok_skew = ANY
+  ok_skew = any
 
   behaviors  = alpha.bhv
   domain     = course:0:359:360
@@ -157,65 +191,47 @@ ProcessConfig = pMarineViewer
 
   tiff_file            = data/portsmouth2.tif
 
-  set_pan_x            = -90
-  set_pan_y            = -56.26
-  zoom                 = 0.65
-  vehicle_shape_scale  = 15
+  set_pan_x            = -1000//375//-5000
+  set_pan_y            = 450//350//-56.26//5950
+  zoom                 = 5//0.65
+  vehicle_shape_scale  = 1.5//3
 
   trails_point_size   = 1
 
   // Appcast configuration
   appcast_height       = 75
-  appcast_width        = 30
+  appcast_width        = 302
   appcast_viewable     = true
   appcast_color_scheme = indigo
   nodes_font_size      = medium
   procs_font_size      = medium
   appcast_font_size    = small
 
-  //marker  = VIEW_MARKER
-
-  //datum_viewable = true
-  //datum_size     = 18
-  //gui_size = small
-
-  //left_context[survey-point] = DEPLOY=true
-  //left_context[survey-point] = MOOS_MANUAL_OVERIDE=false
-  //left_context[survey-point] = RETURN=false
-  left_context[view_polygon] = VIEW_POINT = x=$(XPOS),y=$(YPOS),label=hello
-  left_context[update_return] = RETURN_UPDATE = points= $(XPOS),$(YPOS)
+  left_context[update_return] = VIEW_POINT = x=$(XPOS),y=$(YPOS),label=$(XPOS)!$(YPOS)
  
   right_context[return] = DEPLOY=true
   right_context[return] = MOOS_MANUAL_OVERIDE=false
   right_context[return] = RETURN=false
 
-  //left_context[polyvert] = POLY_VERT=x=$(XPOS),y=$(YPOS)
-
-  scope  = RETURN_UPDATE
-  scope  = WPT_EFFICIENCY_LEG
-  scope  = WPT_EFFICIENCY_SUM
-  scope  = WPT_EFFICIENCY_VAL
-  scope  = RETURN
-  scope  = WPT_STAT
-  scope  = VIEW_MARKER
-  scope  = MVIEWER_LCLICK
-  scope  = MVIEWER_RCLICK
-
   button_one = DEPLOY # DEPLOY=true
   button_one = MOOS_MANUAL_OVERIDE=false # RETURN=false
   button_two = RETURN # RETURN=true
   button_three = CONTINUE # CONTINUE=true
+	
+	SCOPE=WPT_UPDATE
 
   action  = MENU_KEY=deploy # DEPLOY = true # RETURN = false
   action+ = MENU_KEY=deploy # MOOS_MANUAL_OVERIDE=false
   action  = RETURN=true
-  action  = UPDATES_RETURN=speed=1.4
+  //action  = UPDATES_RETURN=speed=1.4
 
   point_viewable_labels = false
   polygon_viewable_labels = false
   seglist_viewable_labels = false
   vehicles_name_mode = names
   trails_viewable = false
+	tiff_viewable = false
+	
 
 }
 
@@ -231,11 +247,19 @@ ProcessConfig = pNodeReporter
   platform_length = 4
 }
 
+//------------------------------------------
+// pNMEA config block
 
+ProcessConfig = pNMEA
+{
+  AppTick    = 2
+  CommsTick	 = 2
+}
+
+//------------------------------------------
 // This block is here in conjunction with the uTermCommand 
 // documentation to demonstrate functionality of that tool.
-// This mission may be alternately 
-
+// This mission may be alternately
 ProcessConfig = uTermCommandFoo
 {
   cmd  = override_true  -->  MOOS_MANUAL_OVERRIDE --> true
