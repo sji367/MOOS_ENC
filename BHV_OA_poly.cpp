@@ -1,7 +1,7 @@
 /************************************************************/
 /*    NAME: Sam Reed                                        */
 /*    ORGN: UNH                                             */
-/*    FILE: BHV_OA.cpp                                      */
+/*    FILE: BHV_OA_poly.cpp                                 */
 /*    DATE: June 2016                                       */
 /************************************************************/
 
@@ -40,12 +40,14 @@ BHV_OA_poly::BHV_OA_poly(IvPDomain gdomain) :
   IvPBehavior(gdomain)
 {
   // Provide a default behavior name
-  IvPBehavior::setParam("name", "ENC_OA");
+  IvPBehavior::setParam("name", "ENC_OA_poly");
 
   // Declare the behavior decision space
   m_domain = subDomain(m_domain, "course,speed");
 
   // Add any variables this behavior needs to subscribe for
+  //   Next_WPT --> Published by the Waypoint BHV
+  //   Poly_Obs --> Published by ENC_Search
   addInfoVars("Next_WPT, Poly_Obs, NAV_SPEED, NAV_X, NAV_Y, NAV_HEAD");
 }
 
@@ -60,74 +62,13 @@ bool BHV_OA_poly::setParam(string param, string val)
   // Get the numerical value of the param argument for convenience once
   double double_val = atof(val.c_str());
   
+  // ASV Length
   if((param == "length")) {
     postWMessage(val);
     return(true);
   }
-  else if (param == "bar") {
-    // return(setBooleanOnString(m_my_bool, val));
-  }
-
   // If not handled above, then just return false;
   return(false);
-}
-
-//---------------------------------------------------------------
-// Procedure: onSetParamComplete()
-//   Purpose: Invoked once after all parameters have been handled.
-//            Good place to ensure all required params have are set.
-//            Or any inter-param relationships like a<b.
-
-void BHV_OA_poly::onSetParamComplete()
-{
-}
-
-//---------------------------------------------------------------
-// Procedure: onHelmStart()
-//   Purpose: Invoked once upon helm start, even if this behavior
-//            is a template and not spawned at startup
-
-void BHV_OA_poly::onHelmStart()
-{
-}
-
-//---------------------------------------------------------------
-// Procedure: onIdleState()
-//   Purpose: Invoked on each helm iteration if conditions not met.
-
-void BHV_OA_poly::onIdleState()
-{
-}
-
-//---------------------------------------------------------------
-// Procedure: onCompleteState()
-
-void BHV_OA_poly::onCompleteState()
-{
-}
-
-//---------------------------------------------------------------
-// Procedure: postConfigStatus()
-//   Purpose: Invoked each time a param is dynamically changed
-
-void BHV_OA_poly::postConfigStatus()
-{
-}
-
-//---------------------------------------------------------------
-// Procedure: onIdleToRunState()
-//   Purpose: Invoked once upon each transition from idle to run state
-
-void BHV_OA_poly::onIdleToRunState()
-{
-}
-
-//---------------------------------------------------------------
-// Procedure: onRunToIdleState()
-//   Purpose: Invoked once upon each transition from run to idle state
-
-void BHV_OA_poly::onRunToIdleState()
-{
 }
 
 //---------------------------------------------------------------
@@ -167,7 +108,7 @@ IvPFunction* BHV_OA_poly::onRunState()
 	}
       // Seperate the individual pieces of the obstacle
       // The format is:
-      //   ASV_X,ASV_Y,heading:# of Obstacles:t_lvl,type@min_ang,max_ang,min_dist_ang@min_ang_dist,max_ang_dist,min_dist!t_lvl,type@min_ang,max_ang,min_dist_ang@min_ang_dist,max_ang_dist,min_dist!...
+      //   ASV_X,ASV_Y,heading:# of Obstacles:t_lvl,type @ min_ang_x,min_ang_y,min_dist_x,min_dist_y,max_ang_x,max_ang_y @ min_ang_dist,max_ang_dist,min_dist!t_lvl,type @ min_ang_x,min_ang_y,min_dist_x,min_dist_y,max_ang_x,max_ang_y @ min_ang_dist,max_ang_dist,min_dist!...
       vector<string> result = parseString(m_obstacles, ':');
 
       // Parse ASV info
@@ -181,16 +122,15 @@ IvPFunction* BHV_OA_poly::onRunState()
       // Parse the number of obstacles
       m_num_obs = (int)floor(strtod(result[1].c_str(), NULL));
       
-      // Store the information on the obstacle
+      // Store the information on the obstacle if there are the right amount of parts in the Poly_obstacle string
       if (result.size()==3)
 	{
 	  m_obs_info = result[2];
 	  ipf = buildZAIC_Vector();
-	  //postWMessage("Building IvP");
 	}
       
     }
-  // Part N: Prior to returning the IvP function, apply the priority wt
+  // Part 3: Prior to returning the IvP function, apply the priority wt
   // Actual weight applied may be some value different than the configured
   // m_priority_wt, depending on the behavior author's insite.
   if(ipf){
@@ -210,15 +150,13 @@ IvPFunction* BHV_OA_poly::onRunState()
 IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 {
   IvPFunction *ivp_function = 0;
-  stringstream ss,ss1,ss2, ss3;
 
-  int maxutil = 100; // Need to look at the Waypoint behavior to see what their maximum utility is
+  int maxutil = 100;
 
-  // This is a constant multiplier for the cost function that sets the prohibition zone such that the utility function is zero when the cost is greater than this constant. The radius of the prohibition zone will be directly proportional to the threat level of the object (t_lvl*multipler) 
-  // Need to set the multiplier so that it is a function of the size and the current speed of the vessel
-  double multiplier;
+  // This is a constant ship_domain for the cost function that sets the prohibition zone such that the utility function is zero when the cost is greater than this constant. The radius of the prohibition zone will be directly proportional to the threat level of the object (t_lvl*ship_domain) 
+  double ship_domain;
   double v_size = 4;
-  multiplier = v_size/m_speed*4.5; 
+  ship_domain = v_size/m_speed*4.5; 
   
   //  First seperate the obstacles from one another
   vector<string> info = parseString(m_obs_info, '!');
@@ -232,11 +170,8 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
   // Fill the array with maxiumum utility
   double OA_util[360];
   fill(OA_util,OA_util+360, maxutil);
-  
-  // This holds all the information on the polygon
-  vector <poly_obs> all_poly_obs;
 
-  // Holds the maximum cost for each obstacle which will be used to remove lead parameter
+  // Holds the maximum cost for each obstacle which will be used in adjusting the lead parameter
   vector <double> max_cost;
 
   for (unsigned int i=0;i<m_num_obs; i++)
@@ -261,38 +196,26 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       // Information on the angles
       //    minimum angle, maximum angle, angle of minimum distance
       vector<string> poly_ang_info = parseString(poly_info[1], ',');
-      double pnt1, pnt2;
+      double pnt_x, pnt_y;
       
       // min_angle
-      pnt1 = (strtod(poly_ang_info[4].c_str(), NULL));
-      pnt2 = (strtod(poly_ang_info[5].c_str(), NULL));
-      obstacle.min_ang.ang = (relAng(m_ASV_x, m_ASV_y, pnt1, pnt2));
+      pnt_x = (strtod(poly_ang_info[4].c_str(), NULL));
+      pnt_y = (strtod(poly_ang_info[5].c_str(), NULL));
+      obstacle.min_ang.ang = (relAng(m_ASV_x, m_ASV_y, pnt_x, pnt_y));
       // Max angle
-      pnt1 = (strtod(poly_ang_info[0].c_str(), NULL));
-      pnt2 = (strtod(poly_ang_info[1].c_str(), NULL));
-      obstacle.max_ang.ang = (relAng(m_ASV_x, m_ASV_y, pnt1, pnt2));
+      pnt_x = (strtod(poly_ang_info[0].c_str(), NULL));
+      pnt_y = (strtod(poly_ang_info[1].c_str(), NULL));
+      obstacle.max_ang.ang = (relAng(m_ASV_x, m_ASV_y, pnt_x, pnt_y));
       // Max Cost
-      pnt1 = (strtod(poly_ang_info[2].c_str(), NULL));
-      pnt2 = (strtod(poly_ang_info[3].c_str(), NULL));
-      obstacle.min_dist.ang = (relAng(m_ASV_x, m_ASV_y, pnt1, pnt2));
-      
-      ss.str(std::string());
-      ss1.str(std::string());
-      ss2.str(std::string());
-      ss3.str(std::string());
-      
-      ss << m_num_obs;
-      ss1 << obstacle.min_ang.ang;
-      ss2 << obstacle.max_ang.ang;
-      ss3 << obstacle.min_dist.ang;
-
-      postMessage("Angle", ss.str() +" Obstacles - min: " + ss1.str()+", max: "+ss2.str()+", max_cost: "+ss3.str());
-
+      pnt_x = (strtod(poly_ang_info[2].c_str(), NULL));
+      pnt_y = (strtod(poly_ang_info[3].c_str(), NULL));
+      obstacle.min_dist.ang = (relAng(m_ASV_x, m_ASV_y, pnt_x, pnt_y));
       
       // Information on the distance
       //    minimum angle distance, maximum angle distance, minimum distance
       vector<string> poly_dist_info = parseString(poly_info[2], ',');
-
+      
+      // Convert distances to a double and check to see if they are less than 1
       double d[3];
       for (int ii = 0; ii<3; ii++)
 	{
@@ -305,9 +228,9 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       obstacle.min_dist.dist = d[2];
 
       // Determine the cost for each angle that you have information on
-      obstacle.min_ang.cost = calc_cost(obstacle.t_lvl,obstacle.min_ang.dist,multiplier);
-      obstacle.max_ang.cost = calc_cost(obstacle.t_lvl,obstacle.max_ang.dist,multiplier);
-      obstacle.min_dist.cost = calc_cost(obstacle.t_lvl,obstacle.min_dist.dist,multiplier);
+      obstacle.min_ang.cost = calc_cost(obstacle.t_lvl,obstacle.min_ang.dist,ship_domain);
+      obstacle.max_ang.cost = calc_cost(obstacle.t_lvl,obstacle.max_ang.dist,ship_domain);
+      obstacle.min_dist.cost = calc_cost(obstacle.t_lvl,obstacle.min_dist.dist,ship_domain);
 
       // Calculate the slope and y intercepts
       // Deal with slope being inf --> set it = to large number
@@ -332,13 +255,12 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       int cur_ang;
       string x,y;
       
+      // Store the maximum cost for the obstacle so that it can be used later to adjust the lead parameter 
       max_cost.push_back(obstacle.min_dist.cost);
-
-      //postMessage("line_min", "y = "+doubleToString(obstacle.min_ang.m)+" x + "+doubleToString(obstacle.min_ang.m));
 
       // The buffer distance is to make sure that the ASV avoids the obstacle with some buffer
       int buffer_width = 20;
-      // Make a larger buffer if the maximum cost (aka the minimum distance) is greater than 1 
+      // If the maximum cost is greater than 1, increase the size of the saftey buffer
       int temp_buff;
 	if (obstacle.min_dist.cost > 1)
 	{
@@ -350,6 +272,7 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	}
    
       // This calculates the utility and stores that value if it is less than the current utility for all obstacles --> min angle to max cost
+      // Makes the first half of the "V Shaped" penalty function
       
       for (double x1 = obstacle.min_ang.ang-buffer_width; x1<=obstacle.min_dist.ang; x1++)
 	{
@@ -359,12 +282,11 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	  else
 	    cost = (obstacle.min_ang.m*x1+obstacle.min_ang.b);
 
-	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
+	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*ship_domain.
 	  if (cost > 1)
 	    {
 	      x = doubleToString(m_ASV_x);
 	      y = doubleToString(m_ASV_y);
-	      postMessage("Cost", "x="+x+", y="+y+", Cost:"+doubleToString(cost));
 	      c = 1;
 	    }
 	  else if (cost < 0)
@@ -372,7 +294,6 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	  else
 	    {
 	      c = pow(cost, 3);
-	      postMessage("C","cost: "+doubleToString(cost)+", c: "+doubleToString(c));
 	    }
 	  utility = maxutil*(1-c);	  
 
@@ -381,7 +302,7 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	  if (cur_ang<0)
 	    cur_ang+=360;
 
-	  // If the current utility value is less than the one for the gaussian window then store the one for the Gaussian window
+	  // If the current utility value (the one that was just calculated) is less than the previously stored value, store the new one
 	  if (utility<OA_util[cur_ang])
 	    OA_util[cur_ang]=floor(utility);
 	}
@@ -390,6 +311,7 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
       maxutil = 100;
 
       // This calculates the utility and stores that value if it is less than the current utility for all obstacles --> max cost to max angle
+      // Makes the first half of the "V Shaped" penalty function
       for (double x2 = obstacle.min_dist.ang; x2<=obstacle.max_ang.ang+buffer_width; x2++)
 	{
 	  // Deal with slope being inf (if maximum angle = mininum distance angle) --> set the cost to the cost of the mininum distance point.
@@ -398,16 +320,14 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	  else
 	    cost = (obstacle.max_ang.m*x2+obstacle.max_ang.b);
 
-	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*multiplier.
+	  // Set a maximum threshold on the cost. If it is below this threshold, then decrease the cost by taking the cube of the cost*ship_domain.
 	  if (cost < 0)
 	    c = 0;
 	  else if (cost > 1)
 	      c = 1;
-
 	  else
 	    {
 	      c = pow(cost, 3);
-	      postMessage("C","cost: "+doubleToString(cost)+", c: "+doubleToString(c));
 	    }
 
 	  // Update the current angle
@@ -417,15 +337,13 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
 	  if (cur_ang < 0)
 	    cur_ang += 360;
 
-	  // If the current utility value is less than the previously stored value, store the new one
+	  // If the current utility value (the one that was just calculated) is less than the previously stored value, store the new one
 	  if (utility<OA_util[cur_ang])
 	    OA_util[cur_ang]=floor(utility);
 	}
-
-      // Push the information on the indivual obstacle to a vector of type poly_obs
-      all_poly_obs.push_back(obstacle);
     }
 
+  // Store the first value
   int iii = 0;
   domain_vals.push_back(iii);
   range_vals.push_back((int)floor(OA_util[iii]));
@@ -447,34 +365,33 @@ IvPFunction *BHV_OA_poly::buildZAIC_Vector()
   domain_vals.clear();
   range_vals.clear();
   
-  // Find the maximum value in the max_cost vector, which holds the maximum cost for each obstacle
+  // Find the maximum value in the max_cost vector, which holds the cost of the minimum distance point for each obstacle
   double maximum_value = *max_element(max_cost.begin(), max_cost.end());
   double lead;
-  // Remove the lead waypoint parameter if cost > .5
+  // Remove the lead waypoint parameter if cost > .75
   if (maximum_value > .75)
     postMessage("WPT_UPDATE", "lead=50");
   else if (maximum_value > .33)
     {
-      lead = (maximum_value-.33)*100+8; // Should increase linearly between 8 and 50 as the cost increases
+      // Increases linearly between 8 and 50 as the cost increases
+      lead = (maximum_value-.33)*100+8; 
       postMessage("WPT_UPDATE", "lead="+doubleToString(lead));
     }
-  else
+  else // If cost is small (>= .33) keep the nominal lead value
     postMessage("WPT_UPDATE", "lead=8");
     
   // Extract the IvP function
   ivp_function = head_zaic_v.extractIvPFunction();
   
-  
   return(ivp_function);
 }
 
-double BHV_OA_poly::calc_cost(int t_lvl, double dist, double multiplier)
+double BHV_OA_poly::calc_cost(int t_lvl, double dist, double ship_domain)
 {
   double cost;
-  stringstream ss;
 
   // Calculate original cost
-  cost= t_lvl/dist*multiplier;
+  cost= t_lvl/dist*ship_domain;
 
   return cost;
 }
